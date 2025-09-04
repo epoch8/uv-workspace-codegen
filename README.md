@@ -55,7 +55,22 @@ custom_steps = """                    # Custom steps as YAML list
 - **`typechecker`** (string): Which type checker to use. Options:
   - `"mypy"` - Use MyPy type checker
   - `"ty"` - Use ty type checker
-- **`custom_steps`** (string): Custom steps as YAML list to include in the workflow. These steps will be inserted after the installation step and before the standard test/linting steps.
+- **`custom_steps`** (string): Custom steps as YAML list to include in the workflow. These steps will be inserted after the installation step and before the standard test/linting steps. Should contain a valid YAML list of step objects, each with a `name` and optionally `run`, `env`, `shell` properties.
+
+### Regenerating Workflows
+
+To regenerate all CI/CD workflows after making configuration changes:
+
+```bash
+gh-actions-codegen
+```
+
+This will:
+1. Scan all libraries in `libs/` for `[tool.gh-actions-codegen]` configuration
+2. Remove old generated workflow files
+3. Generate new workflow files based on current configuration
+
+The generated workflows will automatically run tests, type checking, and linting for each configured library when changes are made to that library's code.
 
 ## How it works
 

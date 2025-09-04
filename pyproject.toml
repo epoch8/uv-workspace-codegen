@@ -23,3 +23,8 @@ packages = ["src/gh_actions_codegen"]
 generate = true
 generate_standard_pytest_step = true
 typechecker = "mypy"
+
+[dependency-groups]
+dev = [
+    "types-pyyaml>=6.0.12.20250822",
+]
