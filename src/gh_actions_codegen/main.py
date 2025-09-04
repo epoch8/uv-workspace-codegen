@@ -1,0 +1,192 @@
+"""
+Main module for the gh-actions-codegen package.
+
+This module contains the main function and logic for generating GitHub Actions
+workflows for libraries in the workspace.
+"""
+
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+import yaml
+from jinja2 import Environment, Template
+
+
+@dataclass
+class Library:
+    """Represents a library with its metadata."""
+
+    name: str
+    path: str
+    package_name: str
+    generate_standard_pytest_step: bool
+    typechecker: str = "mypy"
+    custom_steps: Optional[list[dict]] = None
+
+    def __post_init__(self):
+        if self.custom_steps is None:
+            self.custom_steps = []
+
+
+def discover_libraries(libs_dir: Path) -> list[Library]:
+    """Discover libraries with gh-actions-codegen configuration in their pyproject.toml files."""
+    libraries = []
+
+    for lib_dir in libs_dir.iterdir():
+        if not lib_dir.is_dir():
+            continue
+
+        pyproject_path = lib_dir / "pyproject.toml"
+        if not pyproject_path.exists():
+            continue
+
+        try:
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+
+            # Check if gh-actions-codegen configuration exists
+            gh_config = pyproject_data.get("tool", {}).get("gh-actions-codegen", {})
+            if not gh_config.get("generate", False):
+                continue
+
+            # Extract project name and derive package name
+            project_name = pyproject_data.get("project", {}).get("name", lib_dir.name)
+            package_name = project_name.replace("-", "_")
+
+            # Parse custom_steps if provided
+            custom_steps: list[dict] = []
+            custom_steps_str = gh_config.get("custom_steps", "")
+            if custom_steps_str:
+                try:
+                    # Parse the YAML string to get list of steps
+                    custom_steps = yaml.safe_load(custom_steps_str) or []
+                except yaml.YAMLError as e:
+                    print(f"Warning: Failed to parse custom_steps YAML in {pyproject_path}: {e}")
+                    custom_steps = []
+
+            library = Library(
+                name=project_name,
+                path=f"libs/{lib_dir.name}",
+                package_name=package_name,
+                generate_standard_pytest_step=gh_config.get("generate_standard_pytest_step", False),
+                typechecker=gh_config.get("typechecker", "mypy"),
+                custom_steps=custom_steps,
+            )
+
+            libraries.append(library)
+
+        except (tomllib.TOMLDecodeError, KeyError) as e:
+            print(f"Warning: Failed to parse {pyproject_path}: {e}")
+            continue
+
+    return libraries
+
+
+def generate_workflow(library: Library, template: Template, output_dir: Path) -> None:
+    """Generate a workflow file for a single library."""
+
+    workflow_content = template.render(library=library)
+
+    # Create workflow filename based on library name
+    workflow_filename = f"test-{library.name}.yml"
+    workflow_path = output_dir / workflow_filename
+
+    with open(workflow_path, "w") as f:
+        f.write(workflow_content)
+
+    print(f"Generated workflow: {workflow_path}")
+
+
+def create_jinja_environment() -> Environment:
+    """Create a Jinja2 environment with ansible filters including to_nice_yaml."""
+    from jinja2_ansible_filters import AnsibleCoreFiltersExtension
+
+    env = Environment(extensions=[AnsibleCoreFiltersExtension])
+    return env
+
+
+def find_workspace_root() -> Path:
+    """Find the workspace root directory by looking for pyproject.toml with workspace config."""
+    current_dir = Path.cwd()
+
+    # First, try the current directory and its parents
+    for path in [current_dir] + list(current_dir.parents):
+        pyproject_path = path / "pyproject.toml"
+        if pyproject_path.exists():
+            try:
+                with open(pyproject_path, "rb") as f:
+                    pyproject_data = tomllib.load(f)
+
+                # Check if this is a workspace root
+                if (
+                    "tool" in pyproject_data
+                    and "uv" in pyproject_data["tool"]
+                    and "workspace" in pyproject_data["tool"]["uv"]
+                ):
+                    return path
+            except tomllib.TOMLDecodeError:
+                continue
+
+    # If we can't find a workspace root, assume current directory is the workspace
+    return current_dir
+
+
+def main():
+    """Main function to generate all workflows."""
+
+    # Get the workspace root directory
+    workspace_dir = find_workspace_root()
+    libs_dir = workspace_dir / "libs"
+
+    # Look for the template in the tools directory
+    template_path = workspace_dir / "tools" / "library_cicd.template.yml"
+    if not template_path.exists():
+        # Also try the new location
+        template_path = workspace_dir / "tools" / "gh-actions-codegen" / "library_cicd.template.yml"
+
+    if not template_path.exists():
+        print(f"Error: template not found at {template_path}")
+        return 1
+
+    workflows_dir = workspace_dir / ".github" / "workflows"
+
+    # Ensure workflows directory exists
+    workflows_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load the Jinja template with ansible filters
+    with open(template_path, "r") as f:
+        template_content = f.read()
+
+    env = create_jinja_environment()
+    template = env.from_string(template_content)
+
+    # Discover libraries with gh-actions-codegen configuration
+    libraries = discover_libraries(libs_dir)
+
+    print(f"Found {len(libraries)} libraries:")
+    for lib in libraries:
+        print(f"  - {lib.name} (package: {lib.package_name}, tests: {lib.generate_standard_pytest_step})")
+
+    # Remove old generated workflows (optional - you might want to keep some)
+    # This removes test-*.yml files that start with "test-"
+    for existing_workflow in workflows_dir.glob("test-*.yml"):
+        if existing_workflow.name != "test.yml":  # Keep the main test.yml if it exists
+            print(f"Removing old workflow: {existing_workflow}")
+            existing_workflow.unlink()
+
+    # Generate workflows for each library
+    for library in libraries:
+        try:
+            generate_workflow(library, template, workflows_dir)
+        except Exception as e:
+            print(f"Error generating workflow for {library.name}: {e}")
+            return 1
+
+    print(f"\nSuccessfully generated {len(libraries)} workflow files!")
+    return 0
+
+
+if __name__ == "__main__":
+    exit(main())
