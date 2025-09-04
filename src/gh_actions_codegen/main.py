@@ -140,11 +140,9 @@ def main():
     workspace_dir = find_workspace_root()
     libs_dir = workspace_dir / "libs"
 
-    # Look for the template in the tools directory
-    template_path = workspace_dir / "tools" / "library_cicd.template.yml"
-    if not template_path.exists():
-        # Also try the new location
-        template_path = workspace_dir / "tools" / "gh-actions-codegen" / "library_cicd.template.yml"
+    # Get the template from the package directory
+    package_dir = Path(__file__).parent.parent.parent
+    template_path = package_dir / "library_cicd.template.yml"
 
     if not template_path.exists():
         print(f"Error: template not found at {template_path}")
