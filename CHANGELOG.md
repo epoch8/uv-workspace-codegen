@@ -5,6 +5,62 @@ All notable changes to the gh-actions-codegen package will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-09-05
+
+### Added
+- **Multi-template system**: Support for different template types (`lib`, `project`, `tool`)
+- **Template-specific discovery**: Automatic scanning of appropriate directories based on template type
+- **Template caching**: Efficient template loading with caching for multiple packages of the same type
+- **New template files**:
+  - `lib.template.yml` - For libraries in `libs/` directory
+  - `project.template.yml` - For projects in `projects/` directory or workspace root
+  - `tool.template.yml` - For tools in `tools/` directory
+- **Enhanced workflow naming**: Files now use `{template_type}-{name}.yml` pattern
+
+### Changed
+- **BREAKING**: Renamed internal class from `Library` to `Package` for better terminology
+- **BREAKING**: Template variable changed from `{{ library.* }}` to `{{ package.* }}`
+- **BREAKING**: Function renamed from `discover_libraries()` to `discover_packages()`
+- **BREAKING**: Removed old `library_cicd.template.yml` in favor of new template structure
+- Enhanced discovery logic to support multiple directory types
+- Improved variable naming throughout codebase for consistency
+
+### Technical Details
+- **Template Type Configuration**: New required field `template_type` in `[tool.gh-actions-codegen]`
+- **Multi-directory Discovery**:
+  - `lib` template: Scans `libs/` subdirectories
+  - `project` template: Scans `projects/` subdirectories and workspace root
+  - `tool` template: Scans `tools/` subdirectories
+- **Template Loading**: Dynamic template selection based on `template_type` configuration
+- **Workflow Naming**: Updated from `test-{name}.yml` to `{template_type}-{name}.yml`
+
+### Configuration Migration
+Existing configurations need to add `template_type` field:
+
+**Before:**
+```toml
+[tool.gh-actions-codegen]
+generate = true
+generate_standard_pytest_step = true
+```
+
+**After:**
+```toml
+[tool.gh-actions-codegen]
+generate = true
+template_type = "lib"  # or "project" or "tool"
+generate_standard_pytest_step = true
+```
+
+### Template Structure
+```
+tools/gh-actions-codegen/
+├── templates/
+│   ├── lib.template.yml      # For libraries
+│   ├── project.template.yml  # For projects
+│   └── tool.template.yml     # For tools
+```
+
 ## [0.2.0] - 2025-09-05
 
 ### Added
