@@ -26,4 +26,7 @@ generate_standard_pytest_step = true
 typechecker = "mypy"
 
 [dependency-groups]
-dev = ["types-pyyaml>=6.0.12.20250822"]
+dev = [
+    "pytest>=8.4.1",
+    "types-pyyaml>=6.0.12.20250822",
+]

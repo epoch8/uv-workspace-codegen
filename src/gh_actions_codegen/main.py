@@ -54,17 +54,21 @@ def discover_packages(workspace_dir: Path) -> list[Package]:
         for base_dir in discovery_dirs:
             if template_type == "project" and base_dir == workspace_dir:
                 # For project template at root, check pyproject.toml directly
-                packages.extend(_discover_in_directory(base_dir, template_type, check_root=True))
+                packages.extend(_discover_in_directory(base_dir, template_type, workspace_dir, check_root=True))
             else:
                 # For lib and tool templates, scan subdirectories
                 for item_dir in base_dir.iterdir():
                     if item_dir.is_dir():
-                        packages.extend(_discover_in_directory(item_dir, template_type, check_root=False))
+                        packages.extend(
+                            _discover_in_directory(item_dir, template_type, workspace_dir, check_root=False)
+                        )
 
     return packages
 
 
-def _discover_in_directory(target_dir: Path, template_type: str, check_root: bool = False) -> list[Package]:
+def _discover_in_directory(
+    target_dir: Path, template_type: str, workspace_dir: Path, check_root: bool = False
+) -> list[Package]:
     """Discover packages in a specific directory."""
     packages: list[Package] = []
 
@@ -104,8 +108,7 @@ def _discover_in_directory(target_dir: Path, template_type: str, check_root: boo
         if check_root:
             relative_path = "."
         else:
-            workspace_root = find_workspace_root()
-            relative_path = str(target_dir.relative_to(workspace_root))
+            relative_path = str(target_dir.relative_to(workspace_dir))
 
         package = Package(
             name=project_name,
