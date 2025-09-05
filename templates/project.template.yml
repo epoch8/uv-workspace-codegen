@@ -32,7 +32,8 @@ jobs:
       - name: Install
         shell: bash
         run: |
-          uv sync --all-packages --all-groups
+          cd {{ package.path }}
+          uv sync --all-groups
       {%- if package.custom_steps %}
       {%- for step in package.custom_steps %}
 
