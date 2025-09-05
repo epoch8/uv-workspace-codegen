@@ -1,7 +1,7 @@
 [project]
 name = "gh-actions-codegen"
-version = "0.1.0"
-description = "Generate individual CI/CD workflows for each library in the workspace"
+version = "0.3.0"
+description = "Generate individual CI/CD workflows for packages in the workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "jinja2>=3.1.6",
@@ -21,10 +21,14 @@ packages = ["src/gh_actions_codegen"]
 
 [tool.gh-actions-codegen]
 generate = true
+template_type = "tool"
 generate_standard_pytest_step = true
 typechecker = "mypy"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.17.1",
+    "pytest>=8.4.1",
+    "ruff>=0.12.9",
     "types-pyyaml>=6.0.12.20250822",
 ]

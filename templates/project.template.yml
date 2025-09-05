@@ -1,15 +1,15 @@
-name: Test lib {{ library.name }}
+name: Test project {{ package.name }}
 
 on:
   pull_request:
     paths:
-      - "{{ library.path }}/**"
+      - "{{ package.path }}/**"
       - "pyproject.toml"
       - "uv.lock"
   push:
     branches: [master]
     paths:
-      - "{{ library.path }}/**"
+      - "{{ package.path }}/**"
       - "pyproject.toml"
       - "uv.lock"
   
@@ -32,36 +32,37 @@ jobs:
       - name: Install
         shell: bash
         run: |
-          uv sync --all-packages --all-groups
-      {%- if library.custom_steps %}
-      {%- for step in library.custom_steps %}
+          cd {{ package.path }}
+          uv sync --all-groups
+      {%- if package.custom_steps %}
+      {%- for step in package.custom_steps %}
 
       - {{ step | to_nice_yaml | indent(8) }}
       {%- endfor %}
       {%- endif %}
-      {%- if library.generate_standard_pytest_step %}
+      {%- if package.generate_standard_pytest_step %}
 
       - name: Run tests
         shell: bash
         run: |
-          uv run pytest {{ library.path }}/
+          uv run pytest {{ package.path }}/
       {%- endif %}
 
       - name: Check formatting
         shell: bash
         run: |
-          uv run ruff check {{ library.path }}
-      {%- if library.typechecker == "mypy" %}
+          uv run ruff check {{ package.path }}
+      {%- if package.generate_typechecking_step and package.typechecker == "mypy" %}
 
       - name: Check typing
         shell: bash
         run: |
-          uv run mypy -p {{ library.package_name }}
+          uv run mypy -p {{ package.package_name }}
       {%- endif %}
-      {%- if library.typechecker == "ty" %}
+      {%- if package.generate_typechecking_step and package.typechecker == "ty" %}
 
       - name: Check typing
         shell: bash
         run: |
-          uv run ty check {{ library.path }}
+          uv run ty check {{ package.path }}
       {%- endif %}
