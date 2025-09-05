@@ -52,14 +52,14 @@ jobs:
         shell: bash
         run: |
           uv run ruff check {{ package.path }}
-      {%- if package.typechecker == "mypy" %}
+      {%- if package.generate_typechecking_step and package.typechecker == "mypy" %}
 
       - name: Check typing
         shell: bash
         run: |
           uv run mypy -p {{ package.package_name }}
       {%- endif %}
-      {%- if package.typechecker == "ty" %}
+      {%- if package.generate_typechecking_step and package.typechecker == "ty" %}
 
       - name: Check typing
         shell: bash

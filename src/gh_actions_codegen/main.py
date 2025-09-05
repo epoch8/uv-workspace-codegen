@@ -24,6 +24,7 @@ class Package:
     template_type: str  # Added template_type field
     generate_standard_pytest_step: bool
     typechecker: str = "mypy"
+    generate_typechecking_step: bool = True
     custom_steps: Optional[list[dict]] = None
 
     def __post_init__(self):
@@ -117,6 +118,7 @@ def _discover_in_directory(
             template_type=template_type,
             generate_standard_pytest_step=gh_config.get("generate_standard_pytest_step", False),
             typechecker=gh_config.get("typechecker", "mypy"),
+            generate_typechecking_step=gh_config.get("generate_typechecking_step", True),
             custom_steps=custom_steps,
         )
 
