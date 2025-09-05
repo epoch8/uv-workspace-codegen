@@ -4,8 +4,8 @@ on:
   pull_request:
     paths:
       - "{{ package.path }}/**"
-      - "pyproject.toml"
-      - "uv.lock"
+      # - "pyproject.toml"
+      # - "uv.lock"
   push:
     branches: [master]
     paths:
@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           cd {{ package.path }}
-          uv sync
+          uv sync --all-groups
       {%- if package.custom_steps %}
       {%- for step in package.custom_steps %}
 
