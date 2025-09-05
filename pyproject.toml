@@ -1,6 +1,6 @@
 [project]
 name = "gh-actions-codegen"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate individual CI/CD workflows for each library in the workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -25,6 +25,4 @@ generate_standard_pytest_step = true
 typechecker = "mypy"
 
 [dependency-groups]
-dev = [
-    "types-pyyaml>=6.0.12.20250822",
-]
+dev = ["types-pyyaml>=6.0.12.20250822"]
