@@ -86,6 +86,7 @@ jobs:
       - name: Check Alembic migrations
         shell: bash
         run: |
+          cd {{ package.path }}
           env $(cat .env.ci-cd | grep -v '^#') uv run alembic upgrade heads
           env $(cat .env.ci-cd | grep -v '^#') uv run alembic check
       {%- endif %}
