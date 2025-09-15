@@ -25,6 +25,7 @@ class Package:
     generate_standard_pytest_step: bool
     typechecker: str = "mypy"
     generate_typechecking_step: bool = True
+    generate_alembic_migration_check_step: bool = False
     custom_steps: Optional[list[dict]] = None
 
     def __post_init__(self):
@@ -119,6 +120,7 @@ def _discover_in_directory(
             generate_standard_pytest_step=gh_config.get("generate_standard_pytest_step", False),
             typechecker=gh_config.get("typechecker", "mypy"),
             generate_typechecking_step=gh_config.get("generate_typechecking_step", True),
+            generate_alembic_migration_check_step=gh_config.get("generate_alembic_migration_check_step", False),
             custom_steps=custom_steps,
         )
 
