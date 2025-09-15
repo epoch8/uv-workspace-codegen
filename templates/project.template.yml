@@ -16,6 +16,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    {%- if package.generate_alembic_migration_check_step %}
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    {%- endif %}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,4 +80,13 @@ jobs:
         shell: bash
         run: |
           uv run ty check {{ package.path }}
+      {%- endif %}
+      {%- if package.generate_alembic_migration_check_step %}
+
+      - name: Check Alembic migrations
+        shell: bash
+        run: |
+          cd {{ package.path }}
+          env $(cat .env.ci-cd | grep -v '^#') uv run alembic upgrade heads
+          env $(cat .env.ci-cd | grep -v '^#') uv run alembic check
       {%- endif %}
