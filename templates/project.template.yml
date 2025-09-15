@@ -30,17 +30,6 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
-      memgraph:
-        image: memgraph/memgraph:latest
-        ports:
-          - 7687:7687
-          - 3000:3000
-        options: >-
-          --health-cmd="curl --silent --fail http://localhost:3000/ || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     {%- endif %}
     steps:
       - uses: actions/checkout@v4
