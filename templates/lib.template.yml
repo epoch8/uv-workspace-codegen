@@ -43,6 +43,8 @@ jobs:
       {%- if package.generate_standard_pytest_step %}
 
       - name: Run tests
+        env:
+          {% raw %}OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}{% endraw %}
         shell: bash
         run: |
           uv run pytest {{ package.path }}/
