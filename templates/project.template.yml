@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "{{ package.path }}/**"
+      - "libs/jims*/**"
+      - "libs/vedana*/**"
       # - "pyproject.toml"
       # - "uv.lock"
   push:
