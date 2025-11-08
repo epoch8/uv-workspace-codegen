@@ -1,5 +1,5 @@
 [project]
-name = "gh-actions-codegen"
+name = "uv-workspace-codegen"
 version = "0.3.0"
 description = "Generate individual CI/CD workflows for packages in the workspace"
 requires-python = ">=3.12,<3.13"
@@ -10,16 +10,16 @@ dependencies = [
 ]
 
 [project.scripts]
-gh-actions-codegen = "gh_actions_codegen.main:main"
+uv-workspace-codegen = "uv_workspace_codegen.main:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gh_actions_codegen"]
+packages = ["src/uv_workspace_codegen"]
 
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true
 template_type = "tool"
 generate_standard_pytest_step = true

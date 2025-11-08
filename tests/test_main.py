@@ -1,9 +1,9 @@
-"""Tests for the gh-actions-codegen package."""
+"""Tests for the uv-workspace-codegen package."""
 
 import tempfile
 from pathlib import Path
 
-from gh_actions_codegen.main import Package, discover_packages
+from uv_workspace_codegen.main import Package, discover_packages
 
 
 def test_discover_packages():
@@ -14,7 +14,7 @@ def test_discover_packages():
         libs_dir = workspace_dir / "libs"
         libs_dir.mkdir()
 
-        # Create a library with gh-actions-codegen config
+        # Create a library with uv-workspace-codegen config
         lib1_dir = libs_dir / "test-lib1"
         lib1_dir.mkdir()
 
@@ -22,7 +22,7 @@ def test_discover_packages():
 [project]
 name = "test-lib1"
 
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true
 template_type = "lib"
 generate_standard_pytest_step = true
@@ -32,7 +32,7 @@ typechecker = "mypy"
         with open(lib1_dir / "pyproject.toml", "w") as f:
             f.write(pyproject_content)
 
-        # Create a library without gh-actions-codegen config
+        # Create a library without uv-workspace-codegen config
         lib2_dir = libs_dir / "test-lib2"
         lib2_dir.mkdir()
 
@@ -52,7 +52,7 @@ name = "test-lib2"
 [project]
 name = "test-lib3"
 
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = false
 """
 
@@ -126,7 +126,7 @@ def test_discover_packages_multi_template():
 [project]
 name = "test-lib"
 
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true
 template_type = "lib"
 generate_standard_pytest_step = true
@@ -144,7 +144,7 @@ generate_standard_pytest_step = true
 [project]
 name = "test-tool"
 
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true
 template_type = "tool"
 generate_standard_pytest_step = false

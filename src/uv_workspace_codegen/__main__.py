@@ -1,8 +1,8 @@
 """
-Entry point for running gh_actions_codegen as a module.
+Entry point for running uv_workspace_codegen as a module.
 
 This allows the package to be executed with:
-    python -m gh_actions_codegen
+    python -m uv_workspace_codegen
 """
 
 from .main import main

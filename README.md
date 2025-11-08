@@ -1,4 +1,4 @@
-# gh-actions-codegen
+# uv-workspace-codegen
 
 A tool to automatically generate GitHub Actions workflows for libraries in a workspace.
 
@@ -19,13 +19,13 @@ uv sync
 Run the tool from anywhere in the workspace:
 
 ```bash
-gh-actions-codegen
+uv-workspace-codegen
 ```
 
 Or with uv:
 
 ```bash
-uv run gh-actions-codegen
+uv run uv-workspace-codegen
 ```
 
 ## Configuration
@@ -36,7 +36,7 @@ determines which directory the tool will scan and which template to use:
 
 ### For Libraries (in `libs/` directory):
 ```toml
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true                       # Enable workflow generation
 template_type = "lib"                 # Required: Use library template
 generate_standard_pytest_step = true  # Whether to generate standard pytest step
@@ -54,7 +54,7 @@ custom_steps = """                    # Custom steps as YAML list
 
 ### For Projects (in `projects/` directory):
 ```toml
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true                       # Enable workflow generation
 template_type = "project"             # Required: Use project template
 generate_standard_pytest_step = true  # Whether to generate standard pytest step
@@ -63,7 +63,7 @@ typechecker = "mypy"                  # Type checker to use: "mypy" or "ty"
 
 ### For Tools (in `tools/` directory):
 ```toml
-[tool.gh-actions-codegen]
+[tool.uv-workspace-codegen]
 generate = true                       # Enable workflow generation
 template_type = "tool"                # Required: Use tool template
 generate_standard_pytest_step = true  # Whether to generate standard pytest step
@@ -88,11 +88,11 @@ typechecker = "mypy"                  # Type checker to use: "mypy" or "ty"
 To regenerate all CI/CD workflows after making configuration changes:
 
 ```bash
-gh-actions-codegen
+uv-workspace-codegen
 ```
 
 This will:
-1. Scan all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.gh-actions-codegen]` configuration
+1. Scan all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.uv-workspace-codegen]` configuration
 2. Remove old generated workflow files
 3. Generate new workflow files based on current configuration
 
@@ -102,7 +102,7 @@ The generated workflows will automatically run tests, type checking, and linting
 
 The tool:
 
-1. Scans all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.gh-actions-codegen]` configuration
+1. Scans all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.uv-workspace-codegen]` configuration
 2. Removes old generated workflow files
 3. Generates new workflow files based on current configuration
 4. Uses template-specific Jinja2 templates to generate workflows:
