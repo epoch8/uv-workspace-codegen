@@ -248,6 +248,9 @@ def main():
     # Get the workspace root directory
     workspace_dir = find_workspace_root()
 
+    # Log which directory was discovered as the workspace root
+    print(f"Workspace root discovered: {workspace_dir}")
+
     # Get workspace-level configuration
     workspace_config = get_workspace_config(workspace_dir)
 
