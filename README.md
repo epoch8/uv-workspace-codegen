@@ -1,128 +1,86 @@
 # uv-workspace-codegen
 
-A tool to automatically generate GitHub Actions workflows for libraries in a workspace.
+A small tool that generates GitHub Actions workflows for packages in a workspace.
 
-## Overview
+This project:
 
-This package scans the `libs/` directory and creates individual GitHub Actions workflows for each library that has CI/CD configuration enabled, allowing parallel testing and better CI/CD isolation.
+- discovers packages anywhere in the workspace by looking for `pyproject.toml` files that contain a `[tool.uv-workspace-codegen]` section
+- loads a Jinja2 template per package (template files live in a configurable template directory)
+- writes per-package workflow files into `.github/workflows/`
 
-## Installation
+The README below shows the minimal configuration and usage.
 
-This package is part of the ai-assistants workspace and is automatically installed when you sync the workspace:
+## Quick start
+
+Install (when using `uv`-based workspaces):
 
 ```bash
 uv sync
 ```
 
-## Usage
-
-Run the tool from anywhere in the workspace:
-
-```bash
-uv-workspace-codegen
-```
-
-Or with uv:
+Run from any directory in the workspace:
 
 ```bash
 uv run uv-workspace-codegen
 ```
 
-## Configuration
+Generated workflow files appear in `.github/workflows/`.
 
-To enable CI/CD workflow generation for any package, add the following section
-to its `pyproject.toml`. The **`template_type`** field is **required** and
-determines which directory the tool will scan and which template to use:
+## Configuration (minimal)
 
-### For Libraries (in `libs/` directory):
+Workspace-level options (root `pyproject.toml`):
+
 ```toml
 [tool.uv-workspace-codegen]
-generate = true                       # Enable workflow generation
-template_type = "lib"                 # Required: Use library template
-generate_standard_pytest_step = true  # Whether to generate standard pytest step
-typechecker = "mypy"                  # Type checker to use: "mypy" or "ty"
-custom_steps = """                    # Custom steps as YAML list
-- name: Setup database
-  run: docker run -d postgres
-  
-- name: Run integration tests
-  env:
-    DATABASE_URL: "postgres://localhost"
-  run: pytest integration/
+template_dir = ".github/workflow-templates"    # optional, default
+default_template_type = "default"              # optional, default
+```
+
+Package-level options (in each package `pyproject.toml`):
+
+```toml
+[tool.uv-workspace-codegen]
+generate = true                     # enable generation for this package
+template_type = "my-service"       # optional; selects my-service.template.yml
+generate_standard_pytest_step = true
+typechecker = "mypy"
+custom_steps = """               # optional YAML list of steps
+- name: extra step
+  run: echo hello
 """
 ```
 
-### For Projects (in `projects/` directory):
-```toml
-[tool.uv-workspace-codegen]
-generate = true                       # Enable workflow generation
-template_type = "project"             # Required: Use project template
-generate_standard_pytest_step = true  # Whether to generate standard pytest step
-typechecker = "mypy"                  # Type checker to use: "mypy" or "ty"
-```
+Notes:
 
-### For Tools (in `tools/` directory):
-```toml
-[tool.uv-workspace-codegen]
-generate = true                       # Enable workflow generation
-template_type = "tool"                # Required: Use tool template
-generate_standard_pytest_step = true  # Whether to generate standard pytest step
-typechecker = "mypy"                  # Type checker to use: "mypy" or "ty"
-```
+- `template_type` maps directly to a template filename: `X` → `X.template.yml` in the template directory.
+- If `template_type` is omitted the workspace `default_template_type` is used (or `default` if that is also not set).
 
-### Configuration Options
+## Templates
 
-- **`generate`** (bool, required): Set to `true` to enable workflow generation
-- **`template_type`** (string, required): Which template and directory scanning to use. Options:
-  - `"lib"` - For libraries in `libs/` directory
-  - `"project"` - For projects in `projects/` directory
-  - `"tool"` - For tools in `tools/` directory
-- **`generate_standard_pytest_step`** (bool): Whether to generate the standard pytest step that runs tests
-- **`typechecker`** (string): Which type checker to use. Options:
-  - `"mypy"` - Use MyPy type checker
-  - `"ty"` - Use ty type checker
-- **`custom_steps`** (string): Custom steps as YAML list to include in the workflow. These steps will be inserted after the installation step and before the standard test/linting steps. Should contain a valid YAML list of step objects, each with a `name` and optionally `run`, `env`, `shell` properties.
+Templates are Jinja2 files that receive a `package` object with fields such as `name`, `path`, `package_name`, `template_type`, and configuration flags. Place templates in the directory configured by `template_dir`. Create a file named `<type>.template.yml` to support `template_type = "<type>"`.
 
-### Regenerating Workflows
+Template capabilities (examples):
 
-To regenerate all CI/CD workflows after making configuration changes:
+- inject package metadata
+- include custom steps from `custom_steps`
+- conditionally include test/typecheck steps based on flags
+
+## Regenerate workflows
+
+Run the tool any time you change package or workspace configuration:
 
 ```bash
-uv-workspace-codegen
+uv run uv-workspace-codegen
 ```
 
-This will:
-1. Scan all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.uv-workspace-codegen]` configuration
-2. Remove old generated workflow files
-3. Generate new workflow files based on current configuration
+## Tests
 
-The generated workflows will automatically run tests, type checking, and linting for each configured package when changes are made to that package's code.
+Run the unit tests locally with `pytest` (project uses `pyproject.toml` for test deps):
 
-## How it works
+```bash
+uv run python -m pytest tests/
+```
 
-The tool:
+---
 
-1. Scans all packages in `libs/`, `projects/`, and `tools/` directories for `[tool.uv-workspace-codegen]` configuration
-2. Removes old generated workflow files
-3. Generates new workflow files based on current configuration
-4. Uses template-specific Jinja2 templates to generate workflows:
-   - `lib.template.yml` - For libraries in `libs/` directory
-   - `project.template.yml` - For projects in `projects/` directory
-   - `tool.template.yml` - For tools in `tools/` directory
-
-The generated workflows automatically run tests, type checking, and linting for each configured package when changes are made to that package's code.
-
-## Template
-
-The tool uses template-specific Jinja2 templates to generate the workflow files:
-
-- **`lib.template.yml`** - For libraries in `libs/` directory
-- **`project.template.yml`** - For projects in `projects/` directory  
-- **`tool.template.yml`** - For tools in `tools/` directory
-
-All templates support:
-
-- Standard pytest steps
-- Custom steps insertion
-- Different type checkers (mypy, ty)
-- Conditional step generation based on configuration
+This README focuses on the essentials: discovery, configuration, templates, usage. For examples and template samples check the `.github/workflow-templates/` folder in this repository.

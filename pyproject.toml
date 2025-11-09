@@ -1,6 +1,6 @@
 [project]
 name = "uv-workspace-codegen"
-version = "0.3.0"
+version = "0.4.0"
 description = "Generate individual CI/CD workflows for packages in the workspace"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -21,7 +21,6 @@ packages = ["src/uv_workspace_codegen"]
 
 [tool.uv-workspace-codegen]
 generate = true
-template_type = "tool"
 generate_standard_pytest_step = true
 typechecker = "mypy"
 
