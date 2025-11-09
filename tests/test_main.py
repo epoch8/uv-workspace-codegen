@@ -3,7 +3,12 @@
 import tempfile
 from pathlib import Path
 
-from uv_workspace_codegen.main import Package, discover_packages
+from uv_workspace_codegen.main import (
+    Package,
+    discover_packages,
+    get_workspace_config,
+    load_template,
+)
 
 
 def test_discover_packages():
@@ -60,7 +65,7 @@ generate = false
             f.write(pyproject_content3)
 
         # Discover packages
-        packages = discover_packages(workspace_dir)
+        packages = discover_packages(workspace_dir, {})
 
         # Should only find lib1
         assert len(packages) == 1
@@ -154,7 +159,7 @@ typechecker = "ty"
             f.write(tool_pyproject)
 
         # Discover packages
-        packages = discover_packages(workspace_dir)
+        packages = discover_packages(workspace_dir, {})
 
         # Should find both packages
         assert len(packages) == 2
@@ -177,3 +182,131 @@ typechecker = "ty"
         assert tool_pkg.generate_standard_pytest_step is False
         assert tool_pkg.typechecker == "ty"
         assert tool_pkg.path == "tools/test-tool"
+
+
+def test_get_workspace_config():
+    """Test reading workspace-level configuration."""
+
+    # Create a temporary directory structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        # Test with no pyproject.toml
+        config = get_workspace_config(workspace_dir)
+        assert config == {}
+
+        # Test with pyproject.toml but no uv-workspace-codegen config
+        pyproject_content = """
+[project]
+name = "test-workspace"
+"""
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content)
+
+        config = get_workspace_config(workspace_dir)
+        assert config == {}
+
+        # Test with workspace-level uv-workspace-codegen config
+        pyproject_content = """
+[project]
+name = "test-workspace"
+
+[tool.uv-workspace-codegen]
+template_dir = "custom-templates"
+"""
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content)
+
+        config = get_workspace_config(workspace_dir)
+        assert config == {"template_dir": "custom-templates"}
+
+
+def test_load_template_configurable_dir():
+    """Test loading templates from configurable directory."""
+
+    # Create a temporary directory structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        # Create custom template directory
+        custom_templates_dir = workspace_dir / "my-custom-templates"
+        custom_templates_dir.mkdir()
+
+        # Create a simple template
+        template_content = """
+name: Test {{ package.name }}
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+"""
+        with open(custom_templates_dir / "lib.template.yml", "w") as f:
+            f.write(template_content)
+
+        # Test with custom template directory configuration
+        workspace_config = {"template_dir": "my-custom-templates"}
+        template = load_template("lib", workspace_dir, workspace_config)
+
+        # Verify the template loads correctly
+        assert template is not None
+
+        # Test default template directory (should fail since we don't have templates there)
+        workspace_config_default = {}
+        try:
+            load_template("lib", workspace_dir, workspace_config_default)
+            assert False, "Should have raised FileNotFoundError"
+        except FileNotFoundError as e:
+            assert "Template not found" in str(e)
+            assert ".github/workflow-templates/lib.template.yml" in str(e)
+
+
+def test_default_template_type():
+    """Test that default template type is used when template_type is not specified."""
+    # Create a temporary directory structure
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        # Create a package with no template_type specified
+        package_dir = workspace_dir / "my-package"
+        package_dir.mkdir()
+
+        pyproject_content = """
+[project]
+name = "my-package"
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+"""
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content)
+
+        # Test with default workspace config (should use "default")
+        packages = discover_packages(workspace_dir, {})
+        assert len(packages) == 1
+        assert packages[0].template_type == "default"
+
+        # Test with custom default template type in workspace config
+        workspace_config = {"default_template_type": "my-custom-default"}
+        packages = discover_packages(workspace_dir, workspace_config)
+        assert len(packages) == 1
+        assert packages[0].template_type == "my-custom-default"
+
+        # Test that explicit template_type overrides default
+        pyproject_content_explicit = """
+[project]
+name = "my-package"
+
+[tool.uv-workspace-codegen]
+generate = true
+template_type = "explicit-type"
+generate_standard_pytest_step = true
+"""
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content_explicit)
+
+        packages = discover_packages(workspace_dir, workspace_config)
+        assert len(packages) == 1
+        assert packages[0].template_type == "explicit-type"

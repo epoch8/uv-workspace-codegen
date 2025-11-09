@@ -5,6 +5,23 @@ All notable changes to the uv-workspace-codegen package will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-11-09
+
+### Added
+- Workspace-level template directory configuration (`template_dir`) and default template type (`default_template_type`)
+- Recursive discovery of packages across the entire workspace (not limited to specific folders)
+- Ability to load workflow templates from the target workspace's template directory (`.github/workflow-templates` or custom)
+- "default" template type support and workspace-level default template type fallback
+- Tests and documentation for configurable templates and default template behavior
+
+### Changed
+- Discovery and template-loading code refactored: `discover_packages` now scans the workspace recursively and accepts workspace config
+- `load_template` updated to read templates from the workspace (configurable path)
+- README updated to document generic template types, workspace config, and default behavior
+
+### Notes
+- Backward compatible: packages that explicitly set `template_type` are unaffected. If `template_type` is omitted, the workspace `default_template_type` (or `default`) is used.
+
 ## [0.3.0] - 2025-09-05
 
 ### Added

@@ -5,6 +5,7 @@ This module contains the main function and logic for generating GitHub Actions
 workflows for libraries in the workspace.
 """
 
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,43 +34,47 @@ class Package:
             self.custom_steps = []
 
 
-def get_discovery_directories(template_type: str, workspace_dir: Path) -> list[Path]:
-    """Get directories to scan based on template type."""
-    discovery_map = {
-        "lib": [workspace_dir / "libs"],
-        "project": [workspace_dir / "projects", workspace_dir],  # Check projects/ and root
-        "tool": [workspace_dir / "tools"],
-    }
-
-    dirs = discovery_map.get(template_type, [])
-    return [d for d in dirs if d.exists() and d.is_dir()]
-
-
-def discover_packages(workspace_dir: Path) -> list[Package]:
+def discover_packages(workspace_dir: Path, workspace_config: dict) -> list[Package]:
     """Discover packages with uv-workspace-codegen configuration in their pyproject.toml files."""
     packages = []
 
-    # Scan all possible template types
-    for template_type in ["lib", "project", "tool"]:
-        discovery_dirs = get_discovery_directories(template_type, workspace_dir)
+    # Check workspace root
+    packages.extend(
+        _discover_in_directory(
+            workspace_dir, workspace_dir, workspace_config, check_root=True
+        )
+    )
 
-        for base_dir in discovery_dirs:
-            if template_type == "project" and base_dir == workspace_dir:
-                # For project template at root, check pyproject.toml directly
-                packages.extend(_discover_in_directory(base_dir, template_type, workspace_dir, check_root=True))
-            else:
-                # For lib and tool templates, scan subdirectories
-                for item_dir in base_dir.iterdir():
-                    if item_dir.is_dir():
-                        packages.extend(
-                            _discover_in_directory(item_dir, template_type, workspace_dir, check_root=False)
-                        )
+    # Scan all subdirectories recursively
+    for root, dirs, files in os.walk(workspace_dir):
+        root_path = Path(root)
+
+        # Skip hidden directories and __pycache__
+        if (
+            any(
+                part.startswith(".")
+                for part in root_path.relative_to(workspace_dir).parts
+            )
+            or "__pycache__" in root_path.parts
+        ):
+            dirs[:] = []  # Don't recurse into these
+            continue
+
+        if root_path != workspace_dir:
+            packages.extend(
+                _discover_in_directory(
+                    root_path, workspace_dir, workspace_config, check_root=False
+                )
+            )
 
     return packages
 
 
 def _discover_in_directory(
-    target_dir: Path, template_type: str, workspace_dir: Path, check_root: bool = False
+    target_dir: Path,
+    workspace_dir: Path,
+    workspace_config: dict,
+    check_root: bool = False,
 ) -> list[Package]:
     """Discover packages in a specific directory."""
     packages: list[Package] = []
@@ -87,10 +92,13 @@ def _discover_in_directory(
         if not gh_config.get("generate", False):
             return packages
 
-        # Verify template_type matches
-        config_template_type = gh_config.get("template_type", "lib")  # Default to lib for migration
-        if config_template_type != template_type:
-            return packages
+        # Get template_type from config, with workspace-level default fallback
+        workspace_default_template_type = workspace_config.get(
+            "default_template_type", "default"
+        )
+        config_template_type = gh_config.get(
+            "template_type", workspace_default_template_type
+        )
 
         # Extract project name and derive package name
         project_name = pyproject_data.get("project", {}).get("name", target_dir.name)
@@ -103,7 +111,9 @@ def _discover_in_directory(
             try:
                 custom_steps = yaml.safe_load(custom_steps_str) or []
             except yaml.YAMLError as e:
-                print(f"Warning: Failed to parse custom_steps YAML in {pyproject_path}: {e}")
+                print(
+                    f"Warning: Failed to parse custom_steps YAML in {pyproject_path}: {e}"
+                )
                 custom_steps = []
 
         # Determine path relative to workspace
@@ -116,11 +126,17 @@ def _discover_in_directory(
             name=project_name,
             path=relative_path,
             package_name=package_name,
-            template_type=template_type,
-            generate_standard_pytest_step=gh_config.get("generate_standard_pytest_step", False),
+            template_type=config_template_type,
+            generate_standard_pytest_step=gh_config.get(
+                "generate_standard_pytest_step", False
+            ),
             typechecker=gh_config.get("typechecker", "mypy"),
-            generate_typechecking_step=gh_config.get("generate_typechecking_step", True),
-            generate_alembic_migration_check_step=gh_config.get("generate_alembic_migration_check_step", False),
+            generate_typechecking_step=gh_config.get(
+                "generate_typechecking_step", True
+            ),
+            generate_alembic_migration_check_step=gh_config.get(
+                "generate_alembic_migration_check_step", False
+            ),
             custom_steps=custom_steps,
         )
 
@@ -132,9 +148,30 @@ def _discover_in_directory(
     return packages
 
 
-def load_template(template_type: str, package_dir: Path) -> Template:
+def get_workspace_config(workspace_dir: Path) -> dict:
+    """Get workspace-level uv-workspace-codegen configuration."""
+    pyproject_path = workspace_dir / "pyproject.toml"
+    if not pyproject_path.exists():
+        return {}
+
+    try:
+        with open(pyproject_path, "rb") as f:
+            pyproject_data = tomllib.load(f)
+
+        return pyproject_data.get("tool", {}).get("uv-workspace-codegen", {})
+    except (tomllib.TOMLDecodeError, KeyError):
+        return {}
+
+
+def load_template(
+    template_type: str, workspace_dir: Path, workspace_config: dict
+) -> Template:
     """Load the appropriate template based on template type."""
-    templates_dir = package_dir / "templates"
+    # Get template directory from workspace config, with default fallback
+    template_dir_str = workspace_config.get(
+        "template_dir", ".github/workflow-templates"
+    )
+    templates_dir = workspace_dir / template_dir_str
     template_path = templates_dir / f"{template_type}.template.yml"
 
     if not template_path.exists():
@@ -155,7 +192,7 @@ def generate_workflow(package: Package, template: Template, output_dir: Path) ->
     # Add autogenerated comment at the top
     autogen_comment = (
         "# This file was automatically generated by uv-workspace-codegen\n"
-        "# For more information, see: tools/uv-workspace-codegen/README.md\n"
+        "# For more information, see: https://github.com/epoch8/uv-workspace-codegen/blob/master/README.md\n"
         "# Do not edit this file manually - changes will be overwritten\n\n"
     )
 
@@ -211,14 +248,14 @@ def main():
     # Get the workspace root directory
     workspace_dir = find_workspace_root()
 
-    # Get the package directory for templates
-    package_dir = Path(__file__).parent.parent.parent
+    # Get workspace-level configuration
+    workspace_config = get_workspace_config(workspace_dir)
 
     workflows_dir = workspace_dir / ".github" / "workflows"
     workflows_dir.mkdir(parents=True, exist_ok=True)
 
     # Discover packages with uv-workspace-codegen configuration
-    packages = discover_packages(workspace_dir)
+    packages = discover_packages(workspace_dir, workspace_config)
 
     print(f"Found {len(packages)} items:")
     for pkg in packages:
@@ -233,7 +270,9 @@ def main():
         try:
             # Load template if not cached
             if package.template_type not in templates_cache:
-                templates_cache[package.template_type] = load_template(package.template_type, package_dir)
+                templates_cache[package.template_type] = load_template(
+                    package.template_type, workspace_dir, workspace_config
+                )
 
             template = templates_cache[package.template_type]
             generate_workflow(package, template, workflows_dir)
