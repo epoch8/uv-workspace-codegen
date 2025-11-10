@@ -94,7 +94,7 @@ def _discover_in_directory(
 
         # Get template_type from config, with workspace-level default fallback
         workspace_default_template_type = workspace_config.get(
-            "default_template_type", "default"
+            "default_template_type", "package"
         )
         config_template_type = gh_config.get(
             "template_type", workspace_default_template_type
@@ -174,8 +174,36 @@ def load_template(
     templates_dir = workspace_dir / template_dir_str
     template_path = templates_dir / f"{template_type}.template.yml"
 
+    # If the requested template does not exist, and the requested type is
+    # 'package', attempt to populate it from the bundled template located in
+    # this package's `templates/` directory. Only create the workspace
+    # templates directory when we actually need to write the default file.
     if not template_path.exists():
-        raise FileNotFoundError(f"Template not found: {template_path}")
+        if template_type == "package":
+            bundled_template = (
+                Path(__file__).parent / "templates" / "package.template.yml"
+            )
+            if bundled_template.exists():
+                try:
+                    # Create templates dir now that we will populate it
+                    templates_dir.mkdir(parents=True, exist_ok=True)
+                    with (
+                        open(bundled_template, "r") as src,
+                        open(template_path, "w") as dst,
+                    ):
+                        dst.write(src.read())
+                except Exception:
+                    # On any failure, raise a clear FileNotFoundError to match
+                    # previous behavior for missing templates.
+                    raise FileNotFoundError(
+                        f"Template not found or could not be created: {template_path}"
+                    )
+            else:
+                raise FileNotFoundError(
+                    f"Bundled default template missing: {bundled_template}"
+                )
+        else:
+            raise FileNotFoundError(f"Template not found: {template_path}")
 
     with open(template_path, "r") as f:
         template_content = f.read()

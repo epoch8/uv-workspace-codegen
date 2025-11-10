@@ -44,7 +44,7 @@ Workspace-level options (root `pyproject.toml`):
 ```toml
 [tool.uv-workspace-codegen]
 template_dir = ".github/workflow-templates"    # optional, default
-default_template_type = "default"              # optional, default
+default_template_type = "package"              # optional, default
 ```
 
 Package-level options (in each package `pyproject.toml`):
@@ -66,7 +66,10 @@ Notes:
 - `template_type` maps directly to a template filename: `X` → `X.template.yml`
   in the template directory.
 - If `template_type` is omitted the workspace `default_template_type` is used
-  (or `default` if that is also not set).
+
+Note: If no templates directory or `package.template.yml` exists, the tool will
+automatically create `.github/workflow-templates/` and a minimal
+`package.template.yml` to help you quick-start.
 
 ## Templates
 

@@ -283,10 +283,10 @@ generate_standard_pytest_step = true
         with open(package_dir / "pyproject.toml", "w") as f:
             f.write(pyproject_content)
 
-        # Test with default workspace config (should use "default")
+        # Test with default workspace config (should use "package")
         packages = discover_packages(workspace_dir, {})
         assert len(packages) == 1
-        assert packages[0].template_type == "default"
+        assert packages[0].template_type == "package"
 
         # Test with custom default template type in workspace config
         workspace_config = {"default_template_type": "my-custom-default"}
