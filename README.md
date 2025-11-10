@@ -3,15 +3,23 @@
 A small tool that generates GitHub Actions workflows for packages in a
 workspace.
 
-This project:
-
-- discovers packages anywhere in the workspace by looking for `pyproject.toml`
-  files that contain a `[tool.uv-workspace-codegen]` section
-- loads a Jinja2 template per package (template files live in a configurable
-  template directory)
-- writes per-package workflow files into `.github/workflows/`
-
 The README below shows the minimal configuration and usage.
+
+## Motivation
+
+When you keep multiple Python packages together in a single `uv`-based monorepo,
+it makes development and dependency management easier — but it also complicates
+CI.
+
+With several packages that depend on each other, maintaining per-package GitHub
+Actions workflows becomes repetitive and error-prone. You often want CI to run
+for a package when that package or any of its internal dependencies change, and
+you want consistent, up-to-date pipelines across the repo.
+
+This tool solves that by discovering packages in the workspace, understanding
+their relationships, and generating (or updating) per-package GitHub Actions
+workflows from Jinja2 templates. That lets you keep templates and policy
+centralized while producing tailored workflows for each package automatically.
 
 ## Quick start
 
