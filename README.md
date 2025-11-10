@@ -29,6 +29,14 @@ Install (when using `uv`-based workspaces):
 uv tool install https://github.com/epoch8/uv-workspace-codegen.git
 ```
 
+Mark any package to generate it's ci/cd template. Add this section to it's
+`pyproject.toml` file:
+
+```toml
+[tool.uv-workspace-codegen]
+generate = true
+```
+
 Run from the root directory of the workspace:
 
 ```bash
