@@ -1,5 +1,6 @@
 """Tests for the uv-workspace-codegen package."""
 
+import os
 import tempfile
 from pathlib import Path
 
@@ -76,14 +77,14 @@ generate = false
         assert pkg.template_type == "lib"
         assert pkg.generate_standard_pytest_step is True
         assert pkg.typechecker == "mypy"
-        assert pkg.path == "libs/test-lib1"
+        assert pkg.path == os.path.join("libs", "test-lib1")
 
 
 def test_package_dataclass():
     """Test the Package dataclass initialization."""
     pkg = Package(
         name="test-lib",
-        path="libs/test-lib",
+        path=os.path.join("libs", "test-lib"),
         package_name="test_lib",
         template_type="lib",
         generate_standard_pytest_step=True,
@@ -91,7 +92,7 @@ def test_package_dataclass():
     )
 
     assert pkg.name == "test-lib"
-    assert pkg.path == "libs/test-lib"
+    assert pkg.path == os.path.join("libs", "test-lib")
     assert pkg.package_name == "test_lib"
     assert pkg.template_type == "lib"
     assert pkg.generate_standard_pytest_step is True
@@ -105,7 +106,7 @@ def test_package_with_custom_steps():
 
     pkg = Package(
         name="test-lib",
-        path="libs/test-lib",
+        path=os.path.join("libs", "test-lib"),
         package_name="test_lib",
         template_type="lib",
         generate_standard_pytest_step=True,
@@ -174,14 +175,14 @@ typechecker = "ty"
         assert lib_pkg.name == "test-lib"
         assert lib_pkg.template_type == "lib"
         assert lib_pkg.generate_standard_pytest_step is True
-        assert lib_pkg.path == "libs/test-lib"
+        assert lib_pkg.path == os.path.join("libs", "test-lib")
 
         # Verify tool package
         assert tool_pkg.name == "test-tool"
         assert tool_pkg.template_type == "tool"
         assert tool_pkg.generate_standard_pytest_step is False
         assert tool_pkg.typechecker == "ty"
-        assert tool_pkg.path == "tools/test-tool"
+        assert tool_pkg.path == os.path.join("tools", "test-tool")
 
 
 def test_get_workspace_config():
@@ -259,7 +260,10 @@ jobs:
             assert False, "Should have raised FileNotFoundError"
         except FileNotFoundError as e:
             assert "Template not found" in str(e)
-            assert ".github/workflow-templates/lib.template.yml" in str(e)
+            expected_path = os.path.join(
+                ".github", "workflow-templates", "lib.template.yml"
+            )
+            assert expected_path in str(e)
 
 
 def test_default_template_type():
