@@ -5,12 +5,14 @@ This module contains the main function and logic for generating GitHub Actions
 workflows for libraries in the workspace.
 """
 
+import difflib
 import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import click
 import yaml
 from jinja2 import Environment, Template
 
@@ -164,7 +166,10 @@ def get_workspace_config(workspace_dir: Path) -> dict:
 
 
 def load_template(
-    template_type: str, workspace_dir: Path, workspace_config: dict
+    template_type: str,
+    workspace_dir: Path,
+    workspace_config: dict,
+    diff_mode: bool = False,
 ) -> Template:
     """Load the appropriate template based on template type."""
     # Get template directory from workspace config, with default fallback
@@ -185,6 +190,11 @@ def load_template(
             )
             if bundled_template.exists():
                 try:
+                    # In diff mode, we don't want to create the template file
+                    if diff_mode:
+                        with open(bundled_template, "r") as src:
+                            return create_jinja_environment().from_string(src.read())
+
                     # Create templates dir now that we will populate it
                     templates_dir.mkdir(parents=True, exist_ok=True)
                     with (
@@ -212,7 +222,9 @@ def load_template(
     return env.from_string(template_content)
 
 
-def generate_workflow(package: Package, template: Template, output_dir: Path) -> Path:
+def generate_workflow(
+    package: Package, template: Template, output_dir: Path, diff_mode: bool = False
+) -> Optional[Path]:
     """Generate a workflow file for a single package."""
 
     workflow_content = template.render(package=package)
@@ -230,11 +242,33 @@ def generate_workflow(package: Package, template: Template, output_dir: Path) ->
     workflow_filename = f"{package.template_type}-{package.name}.yml"
     workflow_path = output_dir / workflow_filename
 
-    with open(workflow_path, "w") as f:
-        f.write(workflow_content)
+    if diff_mode:
+        if workflow_path.exists():
+            with open(workflow_path, "r") as f:
+                existing_content = f.readlines()
+        else:
+            existing_content = []
 
-    print(f"Generated workflow: {workflow_path}")
-    return workflow_path
+        new_content_lines = workflow_content.splitlines(keepends=True)
+
+        diff = list(
+            difflib.unified_diff(
+                existing_content,
+                new_content_lines,
+                fromfile=str(workflow_path),
+                tofile=str(workflow_path),
+            )
+        )
+
+        if diff:
+            click.echo("".join(diff), nl=False)
+        return workflow_path
+    else:
+        with open(workflow_path, "w") as f:
+            f.write(workflow_content)
+
+        print(f"Generated workflow: {workflow_path}")
+        return workflow_path
 
 
 def create_jinja_environment() -> Environment:
@@ -271,7 +305,11 @@ def find_workspace_root() -> Path:
     return current_dir
 
 
-def main():
+@click.command()
+@click.option(
+    "--diff", is_flag=True, help="Show diff of changes without writing files."
+)
+def main(diff: bool):
     """Main function to generate all workflows."""
 
     # Get the workspace root directory
@@ -284,7 +322,8 @@ def main():
     workspace_config = get_workspace_config(workspace_dir)
 
     workflows_dir = workspace_dir / ".github" / "workflows"
-    workflows_dir.mkdir(parents=True, exist_ok=True)
+    if not diff:
+        workflows_dir.mkdir(parents=True, exist_ok=True)
 
     # Discover packages with uv-workspace-codegen configuration
     packages = discover_packages(workspace_dir, workspace_config)
@@ -304,27 +343,38 @@ def main():
             # Load template if not cached
             if package.template_type not in templates_cache:
                 templates_cache[package.template_type] = load_template(
-                    package.template_type, workspace_dir, workspace_config
+                    package.template_type,
+                    workspace_dir,
+                    workspace_config,
+                    diff_mode=diff,
                 )
 
             template = templates_cache[package.template_type]
-            generated_file = generate_workflow(package, template, workflows_dir)
-            generated_files.append(generated_file)
+            generated_file = generate_workflow(
+                package, template, workflows_dir, diff_mode=diff
+            )
+            if (
+                generated_file
+            ):  # Only append if a file was actually generated (not in diff mode)
+                generated_files.append(generated_file)
 
         except Exception as e:
             print(f"Error generating workflow for {package.name}: {e}")
             return 1
-    
-    cleanup_stale_workflows(workflows_dir, generated_files)
 
-    print(f"\nSuccessfully generated {len(packages)} workflow files!")
+    cleanup_stale_workflows(workflows_dir, generated_files, diff_mode=diff)
+
+    if not diff:
+        print(f"\nSuccessfully generated {len(packages)} workflow files!")
     return 0
 
 
-def cleanup_stale_workflows(output_dir: Path, generated_files: list[Path]) -> None:
+def cleanup_stale_workflows(
+    output_dir: Path, generated_files: list[Path], diff_mode: bool = False
+) -> None:
     """
     Remove workflow files that were previously generated but are no longer needed.
-    
+
     A file is considered stale if:
     1. It exists in the output directory
     2. It has a .yml or .yaml extension
@@ -333,31 +383,38 @@ def cleanup_stale_workflows(output_dir: Path, generated_files: list[Path]) -> No
     """
     # Normalize generated files to absolute paths for comparison
     generated_paths = {f.resolve() for f in generated_files}
-    
+
     # Check all yaml files in the output directory
     for file_path in output_dir.glob("*.yml"):
-        _check_and_delete_stale_file(file_path, generated_paths)
-        
+        _check_and_delete_stale_file(file_path, generated_paths, diff_mode)
+
     for file_path in output_dir.glob("*.yaml"):
-        _check_and_delete_stale_file(file_path, generated_paths)
+        _check_and_delete_stale_file(file_path, generated_paths, diff_mode)
 
 
-def _check_and_delete_stale_file(file_path: Path, generated_paths: set[Path]) -> None:
+def _check_and_delete_stale_file(
+    file_path: Path, generated_paths: set[Path], diff_mode: bool = False
+) -> None:
     """Helper to check if a single file is stale and delete it if so."""
     # Skip if this file was just generated
     if file_path.resolve() in generated_paths:
         return
-        
+
     try:
         # Check for autogenerated header
         with open(file_path, "r") as f:
-            content = f.read(500) # Read first 500 chars should be enough for header
-            
+            content = f.read(500)  # Read first 500 chars should be enough for header
+
         if "# This file was automatically generated by uv-workspace-codegen" in content:
-            print(f"Removing stale workflow: {file_path}")
-            file_path.unlink()
+            if diff_mode:
+                print(f"Would remove stale workflow: {file_path}")
+            else:
+                print(f"Removing stale workflow: {file_path}")
+                file_path.unlink()
     except Exception as e:
-        print(f"Warning: Failed to check/remove potentially stale file {file_path}: {e}")
+        print(
+            f"Warning: Failed to check/remove potentially stale file {file_path}: {e}"
+        )
 
 
 if __name__ == "__main__":
