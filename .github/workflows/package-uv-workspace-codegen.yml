@@ -7,13 +7,13 @@ name: Test tool uv-workspace-codegen
 on:
   pull_request:
     paths:
-      - "./**"
+      - "**"
       # - "pyproject.toml"
       # - "uv.lock"
   push:
     branches: [master]
     paths:
-      - "./**"
+      - "**"
       - "pyproject.toml"
       - "uv.lock"
   
