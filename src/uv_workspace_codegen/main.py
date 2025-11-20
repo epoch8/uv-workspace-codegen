@@ -7,6 +7,7 @@ workflows for libraries in the workspace.
 
 import difflib
 import os
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -279,41 +280,61 @@ def create_jinja_environment() -> Environment:
     return env
 
 
+def is_workspace_root(path: Path) -> bool:
+    """Check if a directory is a workspace root."""
+    pyproject_path = path / "pyproject.toml"
+    if not pyproject_path.exists():
+        return False
+
+    try:
+        with open(pyproject_path, "rb") as f:
+            pyproject_data = tomllib.load(f)
+
+        return (
+            "tool" in pyproject_data
+            and "uv" in pyproject_data["tool"]
+            and "workspace" in pyproject_data["tool"]["uv"]
+        )
+    except tomllib.TOMLDecodeError:
+        return False
+
+
 def find_workspace_root() -> Path:
     """Find the workspace root directory by looking for pyproject.toml with workspace config."""
     current_dir = Path.cwd()
 
     # First, try the current directory and its parents
     for path in [current_dir] + list(current_dir.parents):
-        pyproject_path = path / "pyproject.toml"
-        if pyproject_path.exists():
-            try:
-                with open(pyproject_path, "rb") as f:
-                    pyproject_data = tomllib.load(f)
-
-                # Check if this is a workspace root
-                if (
-                    "tool" in pyproject_data
-                    and "uv" in pyproject_data["tool"]
-                    and "workspace" in pyproject_data["tool"]["uv"]
-                ):
-                    return path
-            except tomllib.TOMLDecodeError:
-                continue
+        if is_workspace_root(path):
+            return path
 
     # If we can't find a workspace root, assume current directory is the workspace
     return current_dir
 
 
 @click.command()
+@click.argument(
+    "root_dir",
+    required=False,
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+)
 @click.option(
     "--diff", is_flag=True, help="Show diff of changes without writing files."
 )
-def main(diff: bool):
+def main(root_dir: Optional[Path], diff: bool):
     """Main function to generate all workflows."""
 
     # Get the workspace root directory
-    workspace_dir = find_workspace_root()
+    if root_dir:
+        workspace_dir = root_dir.resolve()
+        if not is_workspace_root(workspace_dir):
+            click.echo(
+                f"Error: The provided directory '{workspace_dir}' is not a valid workspace root.",
+                err=True,
+            )
+            sys.exit(1)
+    else:
+        workspace_dir = find_workspace_root()
 
     # Log which directory was discovered as the workspace root
     print(f"Workspace root discovered: {workspace_dir}")

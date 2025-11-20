@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Automatic cleanup of stale workflow files that are no longer generated
 - Diff Mode: Preview changes without writing files using `--diff` flag
+- Added ability to provide target workspace directory as a command line parameter.
 
 ## [0.4.0] - 2025-11-09
 
