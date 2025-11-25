@@ -1,0 +1,7 @@
+name: {{ package.name }}
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Main template"

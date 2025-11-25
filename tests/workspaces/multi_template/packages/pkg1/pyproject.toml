@@ -1,0 +1,5 @@
+[project]
+name = "pkg1"
+
+[tool.uv-workspace-codegen]
+generate = true

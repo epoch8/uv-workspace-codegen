@@ -1,0 +1,7 @@
+name: {{ package.name }} Extra
+on: push
+jobs:
+  extra:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Extra template"

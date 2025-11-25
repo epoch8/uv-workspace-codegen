@@ -86,6 +86,11 @@ Templates are Jinja2 files that receive a `package` object with fields such as
 templates in the directory configured by `template_dir`. Create a file named
 `<type>.template.yml` to support `template_type = "<type>"`.
 
+You can also create multiple templates for the same type by adding a suffix:
+`<type>.<suffix>.template.yml`. For example, `package.extra.template.yml` will
+also be used for `template_type = "package"`, generating a workflow named
+`package-extra-<package-name>.yml`.
+
 Template capabilities (examples):
 
 - inject package metadata

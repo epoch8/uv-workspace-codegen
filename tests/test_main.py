@@ -8,7 +8,7 @@ from uv_workspace_codegen.main import (
     Package,
     discover_packages,
     get_workspace_config,
-    load_template,
+    load_templates,
 )
 
 
@@ -222,7 +222,7 @@ template_dir = "custom-templates"
         assert config == {"template_dir": "custom-templates"}
 
 
-def test_load_template_configurable_dir():
+def test_load_templates_configurable_dir():
     """Test loading templates from configurable directory."""
 
     # Create a temporary directory structure
@@ -248,22 +248,21 @@ jobs:
 
         # Test with custom template directory configuration
         workspace_config = {"template_dir": "my-custom-templates"}
-        template = load_template("lib", workspace_dir, workspace_config)
+        templates = load_templates("lib", workspace_dir, workspace_config)
 
         # Verify the template loads correctly
+        assert len(templates) == 1
+        suffix, template = templates[0]
+        assert suffix == ""
         assert template is not None
 
         # Test default template directory (should fail since we don't have templates there)
         workspace_config_default = {}
         try:
-            load_template("lib", workspace_dir, workspace_config_default)
+            load_templates("lib", workspace_dir, workspace_config_default)
             assert False, "Should have raised FileNotFoundError"
         except FileNotFoundError as e:
-            assert "Template not found" in str(e)
-            expected_path = os.path.join(
-                ".github", "workflow-templates", "lib.template.yml"
-            )
-            assert expected_path in str(e)
+            assert "No templates found for type: lib" in str(e)
 
 
 def test_default_template_type():
