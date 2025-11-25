@@ -166,65 +166,92 @@ def get_workspace_config(workspace_dir: Path) -> dict:
         return {}
 
 
-def load_template(
+def load_templates(
     template_type: str,
     workspace_dir: Path,
     workspace_config: dict,
     diff_mode: bool = False,
-) -> Template:
-    """Load the appropriate template based on template type."""
+) -> list[tuple[str, Template]]:
+    """Load all templates matching the template type."""
     # Get template directory from workspace config, with default fallback
     template_dir_str = workspace_config.get(
         "template_dir", ".github/workflow-templates"
     )
     templates_dir = workspace_dir / template_dir_str
-    template_path = templates_dir / f"{template_type}.template.yml"
+    
+    # Find all matching templates
+    # Pattern 1: {template_type}.template.yml (main template, empty suffix)
+    # Pattern 2: {template_type}.{suffix}.template.yml (extra templates)
+    
+    found_templates: list[tuple[str, Path]] = []
+    
+    # Check for main template
+    main_template_path = templates_dir / f"{template_type}.template.yml"
+    if main_template_path.exists():
+        found_templates.append(("", main_template_path))
+        
+    # Check for extra templates
+    if templates_dir.exists():
+        for path in templates_dir.glob(f"{template_type}.*.template.yml"):
+            # Extract suffix: template_type.suffix.template.yml
+            # name is template_type.suffix.template.yml
+            parts = path.name.split(".")
+            # parts should be [template_type, suffix, 'template', 'yml']
+            if len(parts) == 4 and parts[0] == template_type and parts[2] == "template" and parts[3] == "yml":
+                suffix = parts[1]
+                found_templates.append((suffix, path))
 
-    # If the requested template does not exist, and the requested type is
-    # 'package', attempt to populate it from the bundled template located in
-    # this package's `templates/` directory. Only create the workspace
-    # templates directory when we actually need to write the default file.
-    if not template_path.exists():
-        if template_type == "package":
-            bundled_template = (
-                Path(__file__).parent / "templates" / "package.template.yml"
-            )
-            if bundled_template.exists():
-                try:
-                    # In diff mode, we don't want to create the template file
-                    if diff_mode:
-                        with open(bundled_template, "r") as src:
-                            return create_jinja_environment().from_string(src.read())
+    # If no templates found, and type is 'package', try bundled template
+    if not found_templates and template_type == "package":
+        bundled_template = (
+            Path(__file__).parent / "templates" / "package.template.yml"
+        )
+        if bundled_template.exists():
+            try:
+                # In diff mode, we don't want to create the template file
+                if diff_mode:
+                    with open(bundled_template, "r") as src:
+                        env = create_jinja_environment()
+                        return [("", env.from_string(src.read()))]
 
-                    # Create templates dir now that we will populate it
-                    templates_dir.mkdir(parents=True, exist_ok=True)
-                    with (
-                        open(bundled_template, "r") as src,
-                        open(template_path, "w") as dst,
-                    ):
-                        dst.write(src.read())
-                except Exception:
-                    # On any failure, raise a clear FileNotFoundError to match
-                    # previous behavior for missing templates.
-                    raise FileNotFoundError(
-                        f"Template not found or could not be created: {template_path}"
-                    )
-            else:
+                # Create templates dir now that we will populate it
+                templates_dir.mkdir(parents=True, exist_ok=True)
+                with (
+                    open(bundled_template, "r") as src,
+                    open(main_template_path, "w") as dst,
+                ):
+                    dst.write(src.read())
+                found_templates.append(("", main_template_path))
+            except Exception:
+                # On any failure, raise a clear FileNotFoundError to match
+                # previous behavior for missing templates.
                 raise FileNotFoundError(
-                    f"Bundled default template missing: {bundled_template}"
+                    f"Template not found or could not be created: {main_template_path}"
                 )
         else:
-            raise FileNotFoundError(f"Template not found: {template_path}")
+            raise FileNotFoundError(
+                f"Bundled default template missing: {bundled_template}"
+            )
+    elif not found_templates:
+         raise FileNotFoundError(f"No templates found for type: {template_type}")
 
-    with open(template_path, "r") as f:
-        template_content = f.read()
-
+    results = []
     env = create_jinja_environment()
-    return env.from_string(template_content)
+    
+    for suffix, path in found_templates:
+        with open(path, "r") as f:
+            template_content = f.read()
+        results.append((suffix, env.from_string(template_content)))
+        
+    return results
 
 
 def generate_workflow(
-    package: Package, template: Template, output_dir: Path, diff_mode: bool = False
+    package: Package, 
+    template: Template, 
+    output_dir: Path, 
+    diff_mode: bool = False,
+    suffix: str = ""
 ) -> Optional[Path]:
     """Generate a workflow file for a single package."""
 
@@ -240,7 +267,10 @@ def generate_workflow(
     workflow_content = autogen_comment + workflow_content
 
     # Create workflow filename based on package name and template type
-    workflow_filename = f"{package.template_type}-{package.name}.yml"
+    if suffix:
+        workflow_filename = f"{package.template_type}-{suffix}-{package.name}.yml"
+    else:
+        workflow_filename = f"{package.template_type}-{package.name}.yml"
     workflow_path = output_dir / workflow_filename
 
     if diff_mode:
@@ -361,23 +391,25 @@ def main(root_dir: Optional[Path], diff: bool):
 
     for package in packages:
         try:
-            # Load template if not cached
+            # Load templates if not cached
             if package.template_type not in templates_cache:
-                templates_cache[package.template_type] = load_template(
+                templates_cache[package.template_type] = load_templates(
                     package.template_type,
                     workspace_dir,
                     workspace_config,
                     diff_mode=diff,
                 )
 
-            template = templates_cache[package.template_type]
-            generated_file = generate_workflow(
-                package, template, workflows_dir, diff_mode=diff
-            )
-            if (
-                generated_file
-            ):  # Only append if a file was actually generated (not in diff mode)
-                generated_files.append(generated_file)
+            templates = templates_cache[package.template_type]
+            
+            for suffix, template in templates:
+                generated_file = generate_workflow(
+                    package, template, workflows_dir, diff_mode=diff, suffix=suffix
+                )
+                if (
+                    generated_file
+                ):  # Only append if a file was actually generated (not in diff mode)
+                    generated_files.append(generated_file)
 
         except Exception as e:
             print(f"Error generating workflow for {package.name}: {e}")
