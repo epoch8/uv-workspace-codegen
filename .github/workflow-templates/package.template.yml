@@ -3,13 +3,13 @@ name: Test tool {{ package.name }}
 on:
   pull_request:
     paths:
-      - "{{ package.path }}/**"
+      - "{% if package.path != "." %}{{ package.path }}/{% endif %}**"
       # - "pyproject.toml"
       # - "uv.lock"
   push:
     branches: [master]
     paths:
-      - "{{ package.path }}/**"
+      - "{% if package.path != "." %}{{ package.path }}/{% endif %}**"
       - "pyproject.toml"
       - "uv.lock"
   
