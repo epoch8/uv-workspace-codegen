@@ -8,8 +8,8 @@ on:
   pull_request:
     paths:
       - "**"
-      # - "pyproject.toml"
-      # - "uv.lock"
+      - "pyproject.toml"
+      - "uv.lock"
   push:
     branches: [master]
     paths:
