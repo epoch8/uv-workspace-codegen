@@ -21,6 +21,7 @@ build-backend = "hatchling.build"
 packages = ["src/uv_workspace_codegen"]
 
 [tool.uv-workspace-codegen]
+template_type = ["test", "publish"]
 generate = true
 generate_standard_pytest_step = true
 typechecker = "mypy"
