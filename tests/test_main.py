@@ -7,6 +7,7 @@ from pathlib import Path
 from uv_workspace_codegen.main import (
     Package,
     discover_packages,
+    generate_workflow,
     get_workspace_config,
     load_template,
 )
@@ -74,7 +75,7 @@ generate = false
 
         assert pkg.name == "test-lib1"
         assert pkg.package_name == "test_lib1"
-        assert pkg.template_type == "lib"
+        assert pkg.template_type == ["lib"]
         assert pkg.generate_standard_pytest_step is True
         assert pkg.typechecker == "mypy"
         assert pkg.path == os.path.join("libs", "test-lib1")
@@ -86,7 +87,7 @@ def test_package_dataclass():
         name="test-lib",
         path=os.path.join("libs", "test-lib"),
         package_name="test_lib",
-        template_type="lib",
+        template_type=["lib", "tool", "app"],
         generate_standard_pytest_step=True,
         typechecker="mypy",
     )
@@ -94,7 +95,7 @@ def test_package_dataclass():
     assert pkg.name == "test-lib"
     assert pkg.path == os.path.join("libs", "test-lib")
     assert pkg.package_name == "test_lib"
-    assert pkg.template_type == "lib"
+    assert pkg.template_type == ["lib", "tool", "app"]
     assert pkg.generate_standard_pytest_step is True
     assert pkg.typechecker == "mypy"
     assert pkg.custom_steps == []
@@ -108,7 +109,7 @@ def test_package_with_custom_steps():
         name="test-lib",
         path=os.path.join("libs", "test-lib"),
         package_name="test_lib",
-        template_type="lib",
+        template_type=["lib"],
         generate_standard_pytest_step=True,
         custom_steps=custom_steps,
     )
@@ -173,13 +174,13 @@ typechecker = "ty"
 
         # Verify lib package
         assert lib_pkg.name == "test-lib"
-        assert lib_pkg.template_type == "lib"
+        assert lib_pkg.template_type == ["lib"]
         assert lib_pkg.generate_standard_pytest_step is True
         assert lib_pkg.path == os.path.join("libs", "test-lib")
 
         # Verify tool package
         assert tool_pkg.name == "test-tool"
-        assert tool_pkg.template_type == "tool"
+        assert tool_pkg.template_type == ["tool"]
         assert tool_pkg.generate_standard_pytest_step is False
         assert tool_pkg.typechecker == "ty"
         assert tool_pkg.path == os.path.join("tools", "test-tool")
@@ -290,13 +291,13 @@ generate_standard_pytest_step = true
         # Test with default workspace config (should use "package")
         packages = discover_packages(workspace_dir, {})
         assert len(packages) == 1
-        assert packages[0].template_type == "package"
+        assert packages[0].template_type == ["package"]
 
         # Test with custom default template type in workspace config
         workspace_config = {"default_template_type": "my-custom-default"}
         packages = discover_packages(workspace_dir, workspace_config)
         assert len(packages) == 1
-        assert packages[0].template_type == "my-custom-default"
+        assert packages[0].template_type == ["my-custom-default"]
 
         # Test that explicit template_type overrides default
         pyproject_content_explicit = """
@@ -313,4 +314,82 @@ generate_standard_pytest_step = true
 
         packages = discover_packages(workspace_dir, workspace_config)
         assert len(packages) == 1
-        assert packages[0].template_type == "explicit-type"
+        assert packages[0].template_type == ["explicit-type"]
+
+
+def test_discover_packages_with_list_template_type():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+        package_dir = workspace_dir / "my-package"
+        package_dir.mkdir()
+
+        pyproject_content = """
+[project]
+name = "my-package"
+
+[tool.uv-workspace-codegen]
+generate = true
+template_type = ["lib", "deploy"]
+generate_standard_pytest_step = true
+"""
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content)
+
+        packages = discover_packages(workspace_dir, {})
+        assert len(packages) == 1
+        assert packages[0].template_type == ["lib", "deploy"]
+        assert packages[0].name == "my-package"
+
+        pyproject_content = """
+[project]
+name = "my-package"
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+"""
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write(pyproject_content)
+
+        workspace_config = {"default_template_type": ["default1", "default2"]}
+        packages = discover_packages(workspace_dir, workspace_config)
+        assert len(packages) == 1
+        assert packages[0].template_type == ["default1", "default2"]
+
+
+def test_generate_workflow_template_receives_correct_template_type():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+        output_dir = workspace_dir / ".github" / "workflows"
+        output_dir.mkdir(parents=True)
+
+        template_dir = workspace_dir / "templates"
+        template_dir.mkdir()
+        template_content = """
+name: {{ package.template_type }}-{{ package.name }}
+type_is: {{ package.template_type }}
+on: [push]
+"""
+        with open(template_dir / "lib.template.yml", "w") as f:
+            f.write(template_content)
+
+        workspace_config = {"template_dir": "templates"}
+        template = load_template("lib", workspace_dir, workspace_config)
+
+        package = Package(
+            name="my-pkg",
+            path="libs/my-pkg",
+            package_name="my_pkg",
+            template_type=["lib", "deploy"],
+            generate_standard_pytest_step=True,
+        )
+
+        result = generate_workflow(package, "lib", template, output_dir)
+
+        assert result is not None
+        with open(result) as f:
+            content = f.read()
+
+        assert "lib-my-pkg" in content
+        assert "type_is: lib" in content
+        assert "['lib', 'deploy']" not in content
