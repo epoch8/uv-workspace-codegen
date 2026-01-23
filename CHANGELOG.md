@@ -5,6 +5,35 @@ All notable changes to the uv-workspace-codegen package will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-01-23
+
+### Added
+- **Multiple template types per package**: `template_type` configuration now accepts a list of template types, allowing a single package to generate multiple workflow files from different templates
+- Support for list values in workspace-level `default_template_type` configuration
+
+### Configuration Example
+Packages can now specify multiple template types:
+
+**Single template (still supported):**
+```toml
+[tool.uv-workspace-codegen]
+generate = true
+template_type = "lib"
+```
+
+**Multiple templates (new):**
+```toml
+[tool.uv-workspace-codegen]
+generate = true
+template_type = ["lib", "deploy"]
+```
+
+This generates both `lib-{package}.yml` and `deploy-{package}.yml` workflow files.
+
+### Notes
+- Backward compatible: single string values for `template_type` continue to work as before
+- Templates receive the current template type as a string in `package.template_type`, not the full list
+
 ## [0.5.0] - 2025-11-20
 
 ### Added

@@ -69,10 +69,19 @@ custom_steps = """               # optional YAML list of steps
 """
 ```
 
+Multiple template types can be specified to generate multiple workflow files:
+
+```toml
+[tool.uv-workspace-codegen]
+generate = true
+template_type = ["lib", "deploy"]  # generates lib-{name}.yml and deploy-{name}.yml
+```
+
 Notes:
 
 - `template_type` maps directly to a template filename: `X` → `X.template.yml`
-  in the template directory.
+  in the template directory
+- `template_type` can be a string or a list of strings for multiple workflows
 - If `template_type` is omitted the workspace `default_template_type` is used
 
 Note: If no templates directory or `package.template.yml` exists, the tool will
