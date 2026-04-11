@@ -9,35 +9,44 @@ from click.testing import CliRunner
 from uv_workspace_codegen.main import main
 
 
+def _make_workspace(workspace_dir: Path, package_dir: Path) -> None:
+    """Create a minimal valid UV workspace with one package."""
+    with open(workspace_dir / "pyproject.toml", "w") as f:
+        f.write(f"""
+[tool.uv.workspace]
+members = ["{package_dir.relative_to(workspace_dir)}"]
+""")
+
+
 def test_diff_mode_new_file():
     """Test diff mode with a new file (should show addition)."""
     runner = CliRunner()
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
 
-        # Create a package
         package_dir = workspace_dir / "my-package"
         package_dir.mkdir()
 
-        pyproject_content = """
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write("""
 [project]
 name = "my-package"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
 template_type = "package"
 generate_standard_pytest_step = true
-"""
-        with open(package_dir / "pyproject.toml", "w") as f:
-            f.write(pyproject_content)
+""")
 
-        # Run with --diff
+        _make_workspace(workspace_dir, package_dir)
+
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             result = runner.invoke(main, ["--diff"])
 
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
         assert "--- " in result.output
         assert "+++ " in result.output
         assert (
@@ -45,7 +54,6 @@ generate_standard_pytest_step = true
             in result.output
         )
 
-        # Verify file was NOT created
         workflow_path = (
             workspace_dir / ".github" / "workflows" / "package-my-package.yml"
         )
@@ -58,23 +66,23 @@ def test_diff_mode_modified_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
 
-        # Create a package
         package_dir = workspace_dir / "my-package"
         package_dir.mkdir()
 
-        pyproject_content = """
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write("""
 [project]
 name = "my-package"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
 template_type = "package"
 generate_standard_pytest_step = true
-"""
-        with open(package_dir / "pyproject.toml", "w") as f:
-            f.write(pyproject_content)
+""")
 
-        # Create existing workflow file with different content
+        _make_workspace(workspace_dir, package_dir)
+
         workflows_dir = workspace_dir / ".github" / "workflows"
         workflows_dir.mkdir(parents=True)
         workflow_path = workflows_dir / "package-my-package.yml"
@@ -82,13 +90,12 @@ generate_standard_pytest_step = true
         with open(workflow_path, "w") as f:
             f.write("# Old content\nname: Old Workflow\n")
 
-        # Run with --diff
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             result = runner.invoke(main, ["--diff"])
 
-        assert result.exit_code == 0
+        assert result.exit_code == 0, result.output
         assert "--- " in result.output
         assert "+++ " in result.output
         assert "-# Old content" in result.output
@@ -97,7 +104,6 @@ generate_standard_pytest_step = true
             in result.output
         )
 
-        # Verify file was NOT modified
         with open(workflow_path, "r") as f:
             content = f.read()
         assert content == "# Old content\nname: Old Workflow\n"
@@ -109,36 +115,34 @@ def test_diff_mode_no_changes():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
 
-        # Create a package
         package_dir = workspace_dir / "my-package"
         package_dir.mkdir()
 
-        pyproject_content = """
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write("""
 [project]
 name = "my-package"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
 template_type = "package"
 generate_standard_pytest_step = true
-"""
-        with open(package_dir / "pyproject.toml", "w") as f:
-            f.write(pyproject_content)
+""")
 
-        # First run to generate file
+        _make_workspace(workspace_dir, package_dir)
+
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             runner.invoke(main, [])
 
-        # Run with --diff (should be empty output for diff)
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             result = runner.invoke(main, ["--diff"])
 
-        assert result.exit_code == 0
-        # Should not have diff output
+        assert result.exit_code == 0, result.output
         assert "--- " not in result.output
         assert "+++ " not in result.output
 
@@ -149,23 +153,23 @@ def test_diff_mode_stale_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
 
-        # Create a package
         package_dir = workspace_dir / "my-package"
         package_dir.mkdir()
 
-        pyproject_content = """
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write("""
 [project]
 name = "my-package"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
 template_type = "package"
 generate_standard_pytest_step = true
-"""
-        with open(package_dir / "pyproject.toml", "w") as f:
-            f.write(pyproject_content)
+""")
 
-        # Create a stale workflow file
+        _make_workspace(workspace_dir, package_dir)
+
         workflows_dir = workspace_dir / ".github" / "workflows"
         workflows_dir.mkdir(parents=True)
         stale_workflow_path = workflows_dir / "stale-workflow.yml"
@@ -175,18 +179,13 @@ generate_standard_pytest_step = true
                 "# This file was automatically generated by uv-workspace-codegen\nname: Stale\n"
             )
 
-        # Run with --diff
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             result = runner.invoke(main, ["--diff"])
 
-        assert result.exit_code == 0
-
-        # Verify stale file was NOT deleted
+        assert result.exit_code == 0, result.output
         assert stale_workflow_path.exists()
-
-        # Verify output says it would be removed
         assert f"Would remove stale workflow: {stale_workflow_path}" in result.output
 
 
@@ -196,35 +195,32 @@ def test_diff_mode_valid_file():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
 
-        # Create a package
         package_dir = workspace_dir / "my-package"
         package_dir.mkdir()
 
-        pyproject_content = """
+        with open(package_dir / "pyproject.toml", "w") as f:
+            f.write("""
 [project]
 name = "my-package"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
 template_type = "package"
 generate_standard_pytest_step = true
-"""
-        with open(package_dir / "pyproject.toml", "w") as f:
-            f.write(pyproject_content)
+""")
 
-        # First run to generate file
+        _make_workspace(workspace_dir, package_dir)
+
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             runner.invoke(main, [])
 
-        # Run with --diff
         with patch(
             "uv_workspace_codegen.main.find_workspace_root", return_value=workspace_dir
         ):
             result = runner.invoke(main, ["--diff"])
 
-        assert result.exit_code == 0
-
-        # Verify output does NOT say it would be removed
+        assert result.exit_code == 0, result.output
         assert "Would remove stale workflow" not in result.output

@@ -5,6 +5,11 @@ All notable changes to the uv-workspace-codegen package will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-11
+
+### Changed
+- **Package discovery now uses `uv workspace metadata`**: Replaced filesystem-based scanning with `uv workspace metadata` for accurate, authoritative discovery of workspace members
+
 ## [0.6.0] - 2026-01-23
 
 ### Added

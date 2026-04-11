@@ -31,6 +31,7 @@ template_dir = ".github/workflow-templates"
         """
 [project]
 name = "pkg1"
+version = "0.1.0"
 
 [tool.uv-workspace-codegen]
 generate = true
