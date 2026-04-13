@@ -4,6 +4,9 @@ on:
   push:
     paths:
       - "{{ package.path }}/**"
+      {%- for dependency in package.workspace_dependencies %}
+      - "{{ dependency.path }}/**"
+      {%- endfor %}
 
 jobs:
   test:
