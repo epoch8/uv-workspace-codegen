@@ -5,6 +5,16 @@ All notable changes to the uv-workspace-codegen package will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-13
+
+### Added
+- **`workspace_dependencies` field on `Package`**: Each package now exposes a `list[Package]` of all workspace packages it depends on, including transitive dependencies, in breadth-first order. Populated automatically from `uv workspace metadata` — no configuration needed.
+- Templates receive `template_type` as a top-level variable (in addition to `package.*` fields).
+
+### Changed
+- Templates are now passed the `package` object directly rather than a plain dict, so `workspace_dependencies` items are full `Package` objects — `dep.path`, `dep.name`, `dep.package_name`, etc. are all accessible in templates.
+- Requires uv ≥ 0.11.6 (introduced richer `uv workspace metadata` output with `resolution` and member `id` fields).
+
 ## [0.7.0] - 2026-04-11
 
 ### Changed

@@ -2,9 +2,9 @@
 
 import subprocess
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ class Package:
     generate_typechecking_step: bool = True
     generate_alembic_migration_check_step: bool = False
     custom_steps: Optional[list[dict]] = None
+    workspace_dependencies: list["Package"] = field(default_factory=list)
 
     def __post_init__(self):
         if self.custom_steps is None:
@@ -32,11 +33,48 @@ class Package:
 class UvMember(BaseModel):
     name: str
     path: Path
+    id: Optional[str] = None
+
+
+class UvResolutionDependency(BaseModel):
+    id: str
+    marker: Optional[str] = None
+
+
+class UvResolutionEntry(BaseModel):
+    name: str
+    source: dict
+    kind: Any
+    dependencies: list[UvResolutionDependency] = []
 
 
 class UvWorkspaceMetadata(BaseModel):
     workspace_root: Path
     members: list[UvMember] = []
+    resolution: dict[str, UvResolutionEntry] = {}
+
+
+def _transitive_workspace_deps(
+    member_id: str,
+    resolution: dict[str, UvResolutionEntry],
+    member_ids: set[str],
+    member_id_to_name: dict[str, str],
+) -> list[str]:
+    """Return all transitive workspace dependencies for a member, in BFS order."""
+    result: list[str] = []
+    visited: set[str] = {member_id}
+    queue: list[str] = [member_id]
+    while queue:
+        current_id = queue.pop(0)
+        entry = resolution.get(current_id)
+        if entry is None:
+            continue
+        for dep in entry.dependencies:
+            if dep.id in member_ids and dep.id not in visited:
+                result.append(member_id_to_name[dep.id])
+                visited.add(dep.id)
+                queue.append(dep.id)
+    return result
 
 
 def discover_packages(workspace_dir: Path, workspace_config: dict) -> list[Package]:
@@ -57,18 +95,40 @@ def discover_packages(workspace_dir: Path, workspace_config: dict) -> list[Packa
     )
     metadata = UvWorkspaceMetadata.model_validate_json(result.stdout)
 
-    packages = []
+    member_ids: set[str] = {m.id for m in metadata.members if m.id}
+    member_id_to_name: dict[str, str] = {
+        m.id: m.name for m in metadata.members if m.id
+    }
+
+    # First pass: discover all packages and record each member's dep names.
+    all_discovered: list[tuple[UvMember, list[Package]]] = []
     for member in metadata.members:
         rel_path = member.path.relative_to(metadata.workspace_root)
         check_root = rel_path.parts == ()
-        packages.extend(
-            discover_one_package(
-                metadata.workspace_root / rel_path,
-                metadata.workspace_root,
-                workspace_config,
-                check_root=check_root,
-            )
+        discovered = discover_one_package(
+            metadata.workspace_root / rel_path,
+            metadata.workspace_root,
+            workspace_config,
+            check_root=check_root,
         )
+        all_discovered.append((member, discovered))
+
+    # Build name → Package index (only packages with generate = true).
+    package_by_name: dict[str, Package] = {
+        pkg.name: pkg for _, pkgs in all_discovered for pkg in pkgs
+    }
+
+    # Second pass: resolve dep names to Package objects.
+    packages: list[Package] = []
+    for member, discovered in all_discovered:
+        if member.id:
+            dep_names = _transitive_workspace_deps(
+                member.id, metadata.resolution, member_ids, member_id_to_name
+            )
+            dep_packages = [package_by_name[n] for n in dep_names if n in package_by_name]
+            for pkg in discovered:
+                pkg.workspace_dependencies = dep_packages
+        packages.extend(discovered)
     return packages
 
 

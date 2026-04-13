@@ -3,8 +3,6 @@
 A small tool that generates GitHub Actions workflows for packages in a
 workspace.
 
-The README below shows the minimal configuration and usage.
-
 ## Motivation
 
 When you keep multiple Python packages together in a single `uv`-based monorepo,
@@ -29,8 +27,8 @@ Install (when using `uv`-based workspaces):
 uv tool install https://github.com/epoch8/uv-workspace-codegen.git
 ```
 
-Mark any package to generate it's ci/cd template. Add this section to it's
-`pyproject.toml` file:
+Mark any package to generate its CI/CD workflow. Add this section to its
+`pyproject.toml`:
 
 ```toml
 [tool.uv-workspace-codegen]
@@ -45,9 +43,9 @@ uv-workspace-codegen
 
 Generated workflow files appear in `.github/workflows/`.
 
-## Configuration (minimal)
+## Configuration
 
-Workspace-level options (root `pyproject.toml`):
+### Workspace-level (root `pyproject.toml`)
 
 ```toml
 [tool.uv-workspace-codegen]
@@ -55,21 +53,23 @@ template_dir = ".github/workflow-templates"    # optional, default
 default_template_type = "package"              # optional, default
 ```
 
-Package-level options (in each package `pyproject.toml`):
+### Package-level (each package's `pyproject.toml`)
 
 ```toml
 [tool.uv-workspace-codegen]
-generate = true                  # enable generation for this package
-template_type = "my-service"     # optional; selects my-service.template.yml
-generate_standard_pytest_step = true
-typechecker = "mypy"
-custom_steps = """               # optional YAML list of steps
+generate = true                       # required to enable generation
+template_type = "my-service"          # optional; selects my-service.template.yml
+generate_standard_pytest_step = true  # optional, default false
+typechecker = "mypy"                  # optional, default "mypy"
+generate_typechecking_step = true     # optional, default true
+generate_alembic_migration_check_step = false  # optional, default false
+custom_steps = """                    # optional YAML list of extra steps
 - name: extra step
   run: echo hello
 """
 ```
 
-Multiple template types can be specified to generate multiple workflow files:
+Multiple template types generate multiple workflow files per package:
 
 ```toml
 [tool.uv-workspace-codegen]
@@ -79,27 +79,102 @@ template_type = ["lib", "deploy"]  # generates lib-{name}.yml and deploy-{name}.
 
 Notes:
 
-- `template_type` maps directly to a template filename: `X` → `X.template.yml`
-  in the template directory
-- `template_type` can be a string or a list of strings for multiple workflows
+- `template_type` maps to a template filename: `X` → `X.template.yml` in the
+  template directory
 - If `template_type` is omitted the workspace `default_template_type` is used
-
-Note: If no templates directory or `package.template.yml` exists, the tool will
-automatically create `.github/workflow-templates/` and a minimal
-`package.template.yml` to help you quick-start.
+- If no template directory or `package.template.yml` exists, the tool
+  bootstraps `.github/workflow-templates/` with a minimal starter template
 
 ## Templates
 
-Templates are Jinja2 files that receive a `package` object with fields such as
-`name`, `path`, `package_name`, `template_type`, and configuration flags. Place
-templates in the directory configured by `template_dir`. Create a file named
-`<type>.template.yml` to support `template_type = "<type>"`.
+Templates are Jinja2 files placed in the directory configured by `template_dir`.
+Name them `<type>.template.yml` to match `template_type = "<type>"`.
 
-Template capabilities (examples):
+Each template receives a single `package` object. All fields are available for
+conditional logic, path injection, and metadata:
 
-- inject package metadata
-- include custom steps from `custom_steps`
-- conditionally include test/typecheck steps based on flags
+| Field | Type | Description |
+|---|---|---|
+| `template_type` | `str` | The template type currently being rendered (e.g. `lib`) |
+| `package.name` | `str` | Project name from `pyproject.toml` (e.g. `my-lib`) |
+| `package.path` | `str` | Relative path from workspace root (e.g. `libs/my-lib`, or `.` for root) |
+| `package.package_name` | `str` | Name with hyphens replaced by underscores (e.g. `my_lib`) |
+| `package.workspace_dependencies` | `list[Package]` | All workspace packages this package depends on, transitively (same fields as `package`) |
+| `package.generate_standard_pytest_step` | `bool` | Whether to include a standard pytest step |
+| `package.generate_typechecking_step` | `bool` | Whether to include a type-checking step |
+| `package.typechecker` | `str` | Type-checker tool name (e.g. `mypy`, `ty`) |
+| `package.generate_alembic_migration_check_step` | `bool` | Whether to include an Alembic migration check step |
+| `package.custom_steps` | `list[dict]` | Parsed list of extra workflow steps from `custom_steps` config |
+
+### `workspace_dependencies`
+
+`package.workspace_dependencies` is a flat list of `Package` objects for all
+workspace packages this package depends on, including transitive dependencies,
+in breadth-first order. Each item exposes the same fields as `package` itself
+(`name`, `path`, `package_name`, etc.). It is populated automatically from
+`uv workspace metadata` — no extra configuration is needed.
+
+Use it to watch for changes in dependencies so CI triggers correctly:
+
+```yaml
+on:
+  push:
+    paths:
+      - "{{ package.path }}/**"
+{% for dep in package.workspace_dependencies %}
+      - "{{ dep.path }}/**"
+{% endfor %}
+```
+
+Or to install dependencies before the package under test:
+
+```yaml
+- name: Install workspace dependencies
+  run: |
+{% for dep in package.workspace_dependencies %}
+    uv sync --package {{ dep.name }}
+{% endfor %}
+```
+
+### Example template
+
+```yaml
+name: CI {{ package.name }}
+
+on:
+  push:
+    paths:
+      - "{{ package.path }}/**"
+{% for dep in package.workspace_dependencies %}
+      - "{{ dep.path }}/**"
+{% endfor %}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install deps
+        run: uv sync --package {{ package.name }}
+
+{% if package.generate_standard_pytest_step %}
+      - name: Run tests
+        run: uv run pytest {{ package.path }}
+{% endif %}
+
+{% if package.generate_typechecking_step %}
+      - name: Type check
+        run: uv run {{ package.typechecker }} {{ package.path }}
+{% endif %}
+
+{% for step in package.custom_steps %}
+      - {{ step | to_yaml | indent(8) }}
+{% endfor %}
+```
 
 ## Regenerate workflows
 
@@ -111,15 +186,6 @@ uv run uv-workspace-codegen
 
 ## Tests
 
-Run the unit tests locally with `pytest` (project uses `pyproject.toml` for test
-deps):
-
 ```bash
-uv run python -m pytest tests/
+uv run pytest tests/
 ```
-
----
-
-This README focuses on the essentials: discovery, configuration, templates,
-usage. For examples and template samples check the `.github/workflow-templates/`
-folder in this repository.

@@ -351,6 +351,135 @@ generate_standard_pytest_step = true
         assert packages[0].template_type == ["default1", "default2"]
 
 
+def test_workspace_dependencies_direct():
+    """Test that direct workspace dependencies are computed from the resolution graph."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        pkg_a_dir = workspace_dir / "pkg-a"
+        pkg_a_dir.mkdir()
+        pkg_b_dir = workspace_dir / "pkg-b"
+        pkg_b_dir.mkdir()
+
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[tool.uv.workspace]
+members = ["pkg-a", "pkg-b"]
+""")
+
+        with open(pkg_a_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-a"
+version = "0.1.0"
+dependencies = ["pkg-b"]
+
+[tool.uv.sources]
+pkg-b = { workspace = true }
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        with open(pkg_b_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-b"
+version = "0.1.0"
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        packages = discover_packages(workspace_dir, {})
+        packages.sort(key=lambda p: p.name)
+        pkg_a, pkg_b = packages[0], packages[1]
+
+        assert pkg_a.name == "pkg-a"
+        assert len(pkg_a.workspace_dependencies) == 1
+        assert pkg_a.workspace_dependencies[0].name == "pkg-b"
+        assert pkg_a.workspace_dependencies[0].path == "pkg-b"
+
+        assert pkg_b.name == "pkg-b"
+        assert pkg_b.workspace_dependencies == []
+
+
+def test_workspace_dependencies_transitive():
+    """Test that transitive workspace dependencies are all included (BFS order)."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        pkg_a_dir = workspace_dir / "pkg-a"
+        pkg_b_dir = workspace_dir / "pkg-b"
+        pkg_c_dir = workspace_dir / "pkg-c"
+
+        for pkg_dir in (pkg_a_dir, pkg_b_dir, pkg_c_dir):
+            pkg_dir.mkdir()
+
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[tool.uv.workspace]
+members = ["pkg-a", "pkg-b", "pkg-c"]
+""")
+
+        # pkg-a -> pkg-b -> pkg-c
+        with open(pkg_a_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-a"
+version = "0.1.0"
+dependencies = ["pkg-b"]
+
+[tool.uv.sources]
+pkg-b = { workspace = true }
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        with open(pkg_b_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-b"
+version = "0.1.0"
+dependencies = ["pkg-c"]
+
+[tool.uv.sources]
+pkg-c = { workspace = true }
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        with open(pkg_c_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-c"
+version = "0.1.0"
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        packages = discover_packages(workspace_dir, {})
+        packages.sort(key=lambda p: p.name)
+        pkg_a, pkg_b, pkg_c = packages[0], packages[1], packages[2]
+
+        assert pkg_a.name == "pkg-a"
+        assert [p.name for p in pkg_a.workspace_dependencies] == ["pkg-b", "pkg-c"]
+
+        assert pkg_b.name == "pkg-b"
+        assert [p.name for p in pkg_b.workspace_dependencies] == ["pkg-c"]
+
+        assert pkg_c.name == "pkg-c"
+        assert pkg_c.workspace_dependencies == []
+
+
 def test_generate_workflow_template_receives_correct_template_type():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
@@ -360,8 +489,8 @@ def test_generate_workflow_template_receives_correct_template_type():
         template_dir = workspace_dir / "templates"
         template_dir.mkdir()
         template_content = """
-name: {{ package.template_type }}-{{ package.name }}
-type_is: {{ package.template_type }}
+name: {{ template_type }}-{{ package.name }}
+type_is: {{ template_type }}
 on: [push]
 """
         with open(template_dir / "lib.template.yml", "w") as f:
