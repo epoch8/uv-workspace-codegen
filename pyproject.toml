@@ -1,6 +1,6 @@
 [project]
 name = "uv-workspace-codegen"
-version = "0.8.0"
+version = "0.9.0"
 description = "Generate individual CI/CD workflows for packages in the workspace"
 requires-python = ">=3.12"
 dependencies = [
