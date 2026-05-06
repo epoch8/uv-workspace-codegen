@@ -17,8 +17,9 @@ class Package:
     name: str
     path: str
     package_name: str
-    template_type: list[str]
-    generate_standard_pytest_step: bool
+    generate: bool = True
+    template_type: list[str] = field(default_factory=list)
+    generate_standard_pytest_step: bool = False
     typechecker: str = "mypy"
     generate_typechecking_step: bool = True
     generate_alembic_migration_check_step: bool = False
@@ -113,10 +114,23 @@ def discover_packages(workspace_dir: Path, workspace_config: dict) -> list[Packa
         )
         all_discovered.append((member, discovered))
 
-    # Build name → Package index (only packages with generate = true).
+    # Build name → Package index for all configured packages (generate=true and generate=false).
     package_by_name: dict[str, Package] = {
         pkg.name: pkg for _, pkgs in all_discovered for pkg in pkgs
     }
+
+    # Ensure every workspace member is represented, even without codegen config,
+    # so unconfigured dependencies appear in workspace_dependencies.
+    for member in metadata.members:
+        if member.name not in package_by_name:
+            rel_path = member.path.relative_to(metadata.workspace_root)
+            relative_path = "." if rel_path.parts == () else str(rel_path)
+            package_by_name[member.name] = Package(
+                name=member.name,
+                path=relative_path,
+                package_name=member.name.replace("-", "_"),
+                generate=False,
+            )
 
     # Second pass: resolve dep names to Package objects.
     packages: list[Package] = []
@@ -125,10 +139,13 @@ def discover_packages(workspace_dir: Path, workspace_config: dict) -> list[Packa
             dep_names = _transitive_workspace_deps(
                 member.id, metadata.resolution, member_ids, member_id_to_name
             )
-            dep_packages = [package_by_name[n] for n in dep_names if n in package_by_name]
+            dep_packages = sorted(
+                (package_by_name[n] for n in dep_names if n in package_by_name),
+                key=lambda p: p.path,
+            )
             for pkg in discovered:
                 pkg.workspace_dependencies = dep_packages
-        packages.extend(discovered)
+        packages.extend(pkg for pkg in discovered if pkg.generate)
     return packages
 
 
@@ -150,7 +167,7 @@ def discover_one_package(
             pyproject_data = tomllib.load(f)
 
         gh_config = pyproject_data.get("tool", {}).get("uv-workspace-codegen", {})
-        if not gh_config.get("generate", False):
+        if not gh_config:
             return packages
 
         workspace_default_template_type = workspace_config.get(
@@ -188,6 +205,7 @@ def discover_one_package(
             name=project_name,
             path=relative_path,
             package_name=package_name,
+            generate=gh_config.get("generate", False),
             template_type=config_template_type,
             generate_standard_pytest_step=gh_config.get(
                 "generate_standard_pytest_step", False

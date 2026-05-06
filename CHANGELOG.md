@@ -5,6 +5,15 @@ All notable changes to the uv-workspace-codegen package will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-06
+
+### Changed
+- **`workspace_dependencies` includes all workspace members**: Packages with `generate = false` or no `[tool.uv-workspace-codegen]` section at all now appear in `workspace_dependencies` of packages that depend on them. Previously only `generate = true` packages were tracked, so path-based CI triggers would miss changes in unmanaged dependencies.
+- **`workspace_dependencies` sorted by path**: Dependencies are now sorted alphabetically by `.path`, giving deterministic output across runs.
+
+### Added
+- New `generate` field on `Package` (exposed in templates as `package.generate` / `dep.generate`).
+
 ## [0.8.0] - 2026-04-13
 
 ### Added

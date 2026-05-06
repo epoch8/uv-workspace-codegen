@@ -57,7 +57,7 @@ default_template_type = "package"              # optional, default
 
 ```toml
 [tool.uv-workspace-codegen]
-generate = true                       # required to enable generation
+generate = true                       # true to generate a workflow; false to register without generating
 template_type = "my-service"          # optional; selects my-service.template.yml
 generate_standard_pytest_step = true  # optional, default false
 typechecker = "mypy"                  # optional, default "mypy"
@@ -99,7 +99,8 @@ conditional logic, path injection, and metadata:
 | `package.name` | `str` | Project name from `pyproject.toml` (e.g. `my-lib`) |
 | `package.path` | `str` | Relative path from workspace root (e.g. `libs/my-lib`, or `.` for root) |
 | `package.package_name` | `str` | Name with hyphens replaced by underscores (e.g. `my_lib`) |
-| `package.workspace_dependencies` | `list[Package]` | All workspace packages this package depends on, transitively (same fields as `package`) |
+| `package.generate` | `bool` | Whether a workflow is generated for this package |
+| `package.workspace_dependencies` | `list[Package]` | All workspace packages this package depends on, transitively (same fields as `package`, including `generate=false` packages) |
 | `package.generate_standard_pytest_step` | `bool` | Whether to include a standard pytest step |
 | `package.generate_typechecking_step` | `bool` | Whether to include a type-checking step |
 | `package.typechecker` | `str` | Type-checker tool name (e.g. `mypy`, `ty`) |
@@ -111,8 +112,12 @@ conditional logic, path injection, and metadata:
 `package.workspace_dependencies` is a flat list of `Package` objects for all
 workspace packages this package depends on, including transitive dependencies,
 in breadth-first order. Each item exposes the same fields as `package` itself
-(`name`, `path`, `package_name`, etc.). It is populated automatically from
-`uv workspace metadata` — no extra configuration is needed.
+(`name`, `path`, `package_name`, `generate`, etc.). It is populated automatically
+from `uv workspace metadata` — no extra configuration is needed.
+
+Packages with `generate = false` are included in `workspace_dependencies` of
+packages that depend on them, so their paths still trigger CI correctly. They do
+not appear in the top-level output and no workflow is generated for them.
 
 Use it to watch for changes in dependencies so CI triggers correctly:
 

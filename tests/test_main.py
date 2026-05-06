@@ -480,6 +480,112 @@ generate_standard_pytest_step = true
         assert pkg_c.workspace_dependencies == []
 
 
+def test_workspace_dependencies_no_codegen_section():
+    """Test that packages with no [tool.uv-workspace-codegen] section appear in workspace_dependencies."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        pkg_a_dir = workspace_dir / "pkg-a"
+        pkg_a_dir.mkdir()
+        pkg_b_dir = workspace_dir / "pkg-b"
+        pkg_b_dir.mkdir()
+
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[tool.uv.workspace]
+members = ["pkg-a", "pkg-b"]
+""")
+
+        with open(pkg_a_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-a"
+version = "0.1.0"
+dependencies = ["pkg-b"]
+
+[tool.uv.sources]
+pkg-b = { workspace = true }
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        with open(pkg_b_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-b"
+version = "0.1.0"
+""")
+
+        packages = discover_packages(workspace_dir, {})
+
+        assert len(packages) == 1
+        pkg_a = packages[0]
+        assert pkg_a.name == "pkg-a"
+
+        assert len(pkg_a.workspace_dependencies) == 1
+        dep = pkg_a.workspace_dependencies[0]
+        assert dep.name == "pkg-b"
+        assert dep.path == "pkg-b"
+        assert dep.generate is False
+
+
+def test_workspace_dependencies_generate_false():
+    """Test that generate=false packages appear in workspace_dependencies but not in output."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        workspace_dir = Path(temp_dir)
+
+        pkg_a_dir = workspace_dir / "pkg-a"
+        pkg_a_dir.mkdir()
+        pkg_b_dir = workspace_dir / "pkg-b"
+        pkg_b_dir.mkdir()
+
+        with open(workspace_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[tool.uv.workspace]
+members = ["pkg-a", "pkg-b"]
+""")
+
+        with open(pkg_a_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-a"
+version = "0.1.0"
+dependencies = ["pkg-b"]
+
+[tool.uv.sources]
+pkg-b = { workspace = true }
+
+[tool.uv-workspace-codegen]
+generate = true
+generate_standard_pytest_step = true
+""")
+
+        with open(pkg_b_dir / "pyproject.toml", "w") as f:
+            f.write("""
+[project]
+name = "pkg-b"
+version = "0.1.0"
+
+[tool.uv-workspace-codegen]
+generate = false
+""")
+
+        packages = discover_packages(workspace_dir, {})
+
+        assert len(packages) == 1
+        pkg_a = packages[0]
+        assert pkg_a.name == "pkg-a"
+
+        assert len(pkg_a.workspace_dependencies) == 1
+        dep = pkg_a.workspace_dependencies[0]
+        assert dep.name == "pkg-b"
+        assert dep.path == "pkg-b"
+        assert dep.generate is False
+        assert dep.workspace_dependencies == []
+
+
 def test_generate_workflow_template_receives_correct_template_type():
     with tempfile.TemporaryDirectory() as temp_dir:
         workspace_dir = Path(temp_dir)
