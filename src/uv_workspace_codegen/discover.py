@@ -43,8 +43,8 @@ class UvResolutionDependency(BaseModel):
 
 
 class UvResolutionEntry(BaseModel):
-    name: str
-    source: dict
+    name: Optional[str] = None
+    source: Optional[dict] = None
     kind: Any
     dependencies: list[UvResolutionDependency] = []
 
