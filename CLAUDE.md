@@ -7,6 +7,14 @@
   - `dependencies = ["pkg-b"]` in `[project]`
   - `pkg-b = { workspace = true }` in `[tool.uv.sources]`
 
+## Version Control
+
+- **This project uses `jj` (Jujutsu), not plain `git`.** Use `jj` commands (e.g. `jj log`, `jj diff`, `jj describe`) to inspect history and working-copy state — `git status`/`git log` can be misleading since jj auto-commits the working copy.
+
 ## Documentation
 
 - **Keep README.md in sync with code changes.** When adding, removing, or changing any user-facing functionality (fields, config options, template variables, CLI behaviour), update README.md in the same change.
+
+## Releases
+
+- **When bumping the version in `pyproject.toml`, always add a corresponding entry to `CHANGELOG.md` in the same change.**
